@@ -7,7 +7,7 @@ use crate::{Context, ContextRef, nonnull_or_alloc_error, stat::Flag};
 #[repr(transparent)]
 pub struct Value<'a> {
     pub(crate) handle: NonNull<barvinok_sys::isl_val>,
-    marker: std::marker::PhantomData<*mut &'a ()>,
+    pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
 }
 
 macro_rules! isl_val_new {

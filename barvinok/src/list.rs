@@ -2,11 +2,12 @@ use std::ptr::NonNull;
 
 use crate::{Context, ContextRef, nonnull_or_alloc_error};
 
-pub trait ListRawAPI {
+trait ListRawAPI {
     type Handle;
     type ListHandle;
 
     unsafe fn get_handle(&self) -> *mut Self::Handle;
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self;
 
     unsafe fn get_context(list: *mut Self::ListHandle) -> *mut barvinok_sys::isl_ctx;
 
@@ -104,7 +105,7 @@ pub trait ListRawAPI {
 }
 
 macro_rules! impl_list_raw_api {
-    ($t:ty, handle = $handle:ty, list_handle = $list_handle:ty, prefix = $prefix:ident, $get_handle:stmt) => {
+    ($t:ty, handle = $handle:ty, list_handle = $list_handle:ty, prefix = $prefix:ident, $get_handle:stmt, $from_raw_handle:stmt) => {
         paste::paste! {
             #[allow(unsafe_op_in_unsafe_fn)]
             impl ListRawAPI for $t {
@@ -112,6 +113,8 @@ macro_rules! impl_list_raw_api {
                 type ListHandle = $list_handle;
 
                 $get_handle
+
+                $from_raw_handle
 
                 unsafe fn get_context(list: *mut Self::ListHandle) -> *mut barvinok_sys::isl_ctx {
                     barvinok_sys::[<isl_ $prefix _list_get_ctx>](list)
@@ -245,6 +248,12 @@ impl_list_raw_api!(
     prefix = val,
     unsafe fn get_handle(&self) -> *mut Self::Handle {
         self.handle.as_ptr()
+    },
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
     }
 );
 
@@ -294,6 +303,19 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
     pub fn dump(&self) {
         unsafe { T::list_dump(self.handle.as_ptr()) }
     }
+
+    pub fn get(&self, index: usize) -> Option<T> {
+        let el = unsafe { T::list_get_at(self.handle.as_ptr(), index as i32) };
+        NonNull::new(el).map(|el| unsafe { T::from_raw_handle(el) })
+    }
+
+    pub fn set(&mut self, index: usize, el: T) {
+        let handle =
+            unsafe { T::list_set_at(self.handle.as_ptr(), index as i32, T::get_handle(&el)) };
+        let handle = nonnull_or_alloc_error(handle);
+        std::mem::forget(el);
+        self.handle = handle;
+    }
 }
 
 impl<'a, T: ListRawAPI + 'a> Drop for List<'a, T> {
@@ -329,5 +351,33 @@ mod tests {
         list.push(val);
         assert_eq!(list.len(), 3);
         list.dump();
+    }
+
+    #[test]
+    fn test_list_get() {
+        let ctx = Context::new();
+        let mut list = List::<Value>::new(&ctx, 10);
+        let val1 = Value::new_ui(&ctx, 42);
+        let val2 = Value::new_ui(&ctx, 43);
+        list.push(val1.clone());
+        list.push(val2.clone());
+        assert!(list.get(0).unwrap() == val1);
+        assert!(list.get(1).unwrap() == val2);
+        assert!(list.get(2).is_none());
+    }
+
+    #[test]
+    fn test_list_set() {
+        let ctx = Context::new();
+        let mut list = List::<Value>::new(&ctx, 10);
+        let val1 = Value::new_ui(&ctx, 42);
+        let val2 = Value::new_ui(&ctx, 43);
+        list.push(val1.clone());
+        list.push(val2.clone());
+        assert!(list.get(0).unwrap() == val1);
+        assert!(list.get(1).unwrap() == val2);
+        let val3 = Value::new_ui(&ctx, 44);
+        list.set(0, val3.clone());
+        assert!(list.get(0).unwrap() == val3);
     }
 }
