@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use crate::nonnull_or_alloc_error;
+use crate::{Context, ContextRef, nonnull_or_alloc_error};
 
 pub trait ListRawAPI {
     type Handle;
@@ -250,27 +250,59 @@ impl_list_raw_api!(
 
 pub struct List<'a, T: ListRawAPI> {
     handle: NonNull<T::ListHandle>,
-    marker: std::marker::PhantomData<&'a [&'a T]>,
+    marker: std::marker::PhantomData<*mut &'a [&'a T]>,
 }
 
-impl<'a, T: ListRawAPI> List<'a, T> {
-    pub fn new(ctx: *mut barvinok_sys::isl_ctx, capacity: usize) -> Self {
-        let handle = unsafe { T::list_alloc(ctx, capacity as i32) };
+impl<'a, T: ListRawAPI + 'a> List<'a, T> {
+    pub fn new(ctx: &'a Context, capacity: usize) -> Self {
+        let handle = unsafe { T::list_alloc(ctx.0.as_ptr(), capacity as i32) };
         let handle = nonnull_or_alloc_error(handle);
         Self {
             handle,
             marker: std::marker::PhantomData,
         }
     }
+
+    pub fn context(&self) -> ContextRef<'a> {
+        ContextRef(
+            unsafe { NonNull::new_unchecked(T::get_context(self.handle.as_ptr())) },
+            std::marker::PhantomData,
+        )
+    }
+
+    pub fn len(&self) -> usize {
+        unsafe { T::list_size(self.handle.as_ptr()) as usize }
+    }
+
+    pub fn new_singleton(el: T) -> Self {
+        let handle = unsafe { T::list_from_el(T::get_handle(&el)) };
+        let handle = nonnull_or_alloc_error(handle);
+        std::mem::forget(el);
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+
+    pub fn push(&mut self, el: T) {
+        let handle = unsafe { T::list_add(self.handle.as_ptr(), T::get_handle(&el)) };
+        let handle = nonnull_or_alloc_error(handle);
+        std::mem::forget(el);
+        self.handle = handle;
+    }
+
+    pub fn dump(&self) {
+        unsafe { T::list_dump(self.handle.as_ptr()) }
+    }
 }
 
-impl<'a, T: ListRawAPI> Drop for List<'a, T> {
+impl<'a, T: ListRawAPI + 'a> Drop for List<'a, T> {
     fn drop(&mut self) {
         unsafe { T::list_free(self.handle.as_ptr()) };
     }
 }
 
-impl<'a, T: ListRawAPI> Clone for List<'a, T> {
+impl<'a, T: ListRawAPI + 'a> Clone for List<'a, T> {
     fn clone(&self) -> Self {
         let handle = unsafe { T::list_copy(self.handle.as_ptr()) };
         let handle = nonnull_or_alloc_error(handle);
@@ -278,5 +310,24 @@ impl<'a, T: ListRawAPI> Clone for List<'a, T> {
             handle,
             marker: std::marker::PhantomData,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::value::Value;
+
+    #[test]
+    fn test_list_creation_and_push() {
+        let ctx = Context::new();
+        let mut list = List::<Value>::new(&ctx, 10);
+        assert_eq!(list.len(), 0);
+        let val = Value::new_ui(&ctx, 42);
+        list.push(val.clone() + val.clone());
+        list.push(val.clone() * val.clone());
+        list.push(val);
+        assert_eq!(list.len(), 3);
+        list.dump();
     }
 }

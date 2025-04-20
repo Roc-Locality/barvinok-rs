@@ -35,7 +35,7 @@ impl Default for Context {
 }
 
 #[repr(transparent)]
-pub struct ContextRef<'a>(NonNull<barvinok_sys::isl_ctx>, PhantomData<&'a ()>);
+pub struct ContextRef<'a>(NonNull<barvinok_sys::isl_ctx>, PhantomData<*mut &'a ()>);
 
 impl std::ops::Deref for ContextRef<'_> {
     type Target = Context;
