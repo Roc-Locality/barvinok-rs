@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 barvinok-sys = { path = "../barvinok-sys" }
 num-traits = "0.2.19"
+thiserror = "2.0.12"

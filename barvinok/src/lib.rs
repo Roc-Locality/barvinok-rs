@@ -1,9 +1,20 @@
-use std::ptr::NonNull;
+use std::{marker::PhantomData, ptr::NonNull};
 
 pub mod qpolynomial;
 pub mod space;
-pub mod stat;
 pub mod value;
+
+mod stat;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("expected an integer value, got rational or nan")]
+    NonIntegralValue,
+    #[error("invalid string format")]
+    ParseError,
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 fn nonnull_or_alloc_error<T>(ptr: *mut T) -> NonNull<T> {
     // We don't know the exact layout of T, it is likely to be an opaque ZST.
@@ -15,6 +26,23 @@ fn nonnull_or_alloc_error<T>(ptr: *mut T) -> NonNull<T> {
 
 #[repr(transparent)]
 pub struct Context(NonNull<barvinok_sys::isl_ctx>);
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[repr(transparent)]
+pub struct ContextRef<'a>(NonNull<barvinok_sys::isl_ctx>, PhantomData<&'a ()>);
+
+impl std::ops::Deref for ContextRef<'_> {
+    type Target = Context;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { std::mem::transmute(self) }
+    }
+}
 
 impl Context {
     pub fn new() -> Self {

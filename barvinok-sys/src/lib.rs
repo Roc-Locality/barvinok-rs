@@ -3,6 +3,7 @@
 #![allow(improper_ctypes)]
 #![allow(non_upper_case_globals)]
 #![allow(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::missing_safety_doc)]
 #![no_std]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -11,7 +12,7 @@ mod tests {
     use super::{isl_ctx_alloc, isl_ctx_free};
 
     #[test]
-    fn it_creates_isl_context () {
+    fn it_creates_isl_context() {
         unsafe {
             let context = isl_ctx_alloc();
             isl_ctx_free(context);
