@@ -93,3 +93,35 @@ impl From<Value<'_>> for f64 {
         value.to_f64()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Context;
+
+    #[test]
+    fn test_value() {
+        let ctx = Context::new();
+        let val = Value::new_si(&ctx, 42);
+        assert_eq!(val.numerator(), 42);
+        assert_eq!(val.denominator(), 1);
+        assert_eq!(val.to_f64(), 42.0);
+    }
+
+    #[test]
+    fn test_value_clone() {
+        let ctx = Context::new();
+        let val = Value::new_si(&ctx, 42);
+        let val_clone = val.clone();
+        assert_eq!(val_clone.numerator(), 42);
+        assert_eq!(val_clone.denominator(), 1);
+        assert_eq!(val_clone.to_f64(), 42.0);
+    }
+
+    #[test]
+    fn test_value_chunks() {
+        let ctx = Context::new();
+        let val = Value::new_chunks(&ctx, &[0, 2, 2]);
+        assert!((val.to_f64() - 2.0f64.powi(33) - 2.0f64.powi(65)).abs() < f64::EPSILON);
+    }
+}
