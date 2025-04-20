@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, ptr::NonNull};
 
 pub mod list;
+mod printer;
 pub mod qpolynomial;
 pub mod space;
 pub mod value;

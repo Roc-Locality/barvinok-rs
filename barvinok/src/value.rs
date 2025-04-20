@@ -1,13 +1,39 @@
-use std::ptr::NonNull;
+use std::{fmt::Debug, ptr::NonNull};
 
 use num_traits::PrimInt;
 
-use crate::{Context, ContextRef, nonnull_or_alloc_error, stat::Flag};
+use crate::{Context, ContextRef, nonnull_or_alloc_error, printer::ISLPrint, stat::Flag};
 
 #[repr(transparent)]
 pub struct Value<'a> {
     pub(crate) handle: NonNull<barvinok_sys::isl_val>,
     pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
+}
+
+impl<'a> ISLPrint<'a> for Value<'a> {
+    type Handle = barvinok_sys::isl_val;
+
+    fn context(&self) -> ContextRef<'a> {
+        self.context_ref()
+    }
+
+    fn handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr()
+    }
+
+    unsafe fn isl_printer_print(
+        printer: *mut barvinok_sys::isl_printer,
+        handle: *mut Self::Handle,
+    ) -> *mut barvinok_sys::isl_printer {
+        unsafe { barvinok_sys::isl_printer_print_val(printer, handle) }
+    }
+}
+
+impl Debug for Value<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let wrapper = crate::printer::FmtWrapper::new(self);
+        Debug::fmt(&wrapper, f)
+    }
 }
 
 macro_rules! isl_val_new {
@@ -589,12 +615,12 @@ mod tests {
     }
 
     #[test]
-    fn test_dump_inv() {
+    fn test_print_inv() {
         let ctx = Context::new();
         let val = Value::new_si(&ctx, 42);
-        val.dump();
+        println!("val: {:?}", val);
         let val_inv = val.clone().inv();
-        val_inv.dump();
+        println!("val_inv: {:?}", val_inv);
     }
 
     #[test]
