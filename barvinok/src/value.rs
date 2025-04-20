@@ -6,7 +6,7 @@ use crate::{Context, ContextRef, nonnull_or_alloc_error, stat::Flag};
 
 #[repr(transparent)]
 pub struct Value<'a> {
-    handle: NonNull<barvinok_sys::isl_val>,
+    pub(crate) handle: NonNull<barvinok_sys::isl_val>,
     marker: std::marker::PhantomData<&'a ()>,
 }
 
