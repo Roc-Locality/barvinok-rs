@@ -9,36 +9,59 @@ pub struct Ident<'a> {
     pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
 }
 
+type CastFn = fn(NonNull<std::ffi::c_void>) -> NonNull<dyn Any>;
+
+#[repr(C)]
+struct UserData<T> {
+    get_as_any: CastFn,
+    data: T,
+}
+
 impl<'a> Ident<'a> {
     pub fn new(ctx: &'a Context, name: &str) -> Result<Self, crate::Error> {
-        Self::new_with_user(ctx, name, None)
-    }
-    pub fn new_with_user(
-        ctx: &'a Context,
-        name: &str,
-        user_data: Option<Box<dyn Any>>,
-    ) -> Result<Self, crate::Error> {
-        let user_data = user_data
-            .map(Box::new)
-            .map(Box::into_raw)
-            .unwrap_or_else(std::ptr::null_mut);
-
         let cstring = std::ffi::CString::new(name)?;
 
         let handle = unsafe {
-            barvinok_sys::isl_id_alloc(
-                ctx.0.as_ptr(),
-                cstring.as_ptr(),
-                user_data as *mut std::ffi::c_void,
-            )
+            barvinok_sys::isl_id_alloc(ctx.0.as_ptr(), cstring.as_ptr(), std::ptr::null_mut())
         };
 
-        unsafe extern "C" fn cleanup_user_data(user_data: *mut std::ffi::c_void) {
-            std::mem::drop(unsafe { Box::from_raw(user_data as *mut Box<dyn Any>) });
+        let handle = nonnull_or_alloc_error(handle);
+
+        Ok(Self {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    pub fn new_with_user<T: Any>(
+        ctx: &'a Context,
+        name: &str,
+        user_data: T,
+    ) -> Result<Self, crate::Error> {
+        fn get_as_any<T: Any>(ptr: NonNull<std::ffi::c_void>) -> NonNull<dyn Any> {
+            let user_data = ptr.cast::<UserData<T>>();
+            let user_data = unsafe { &user_data.as_ref().data };
+            NonNull::from(user_data)
+        }
+        unsafe extern "C" fn drop<T>(ptr: *mut std::ffi::c_void) {
+            let user_data = ptr as *mut UserData<T>;
+            let user_data = unsafe { Box::from_raw(user_data) };
+            std::mem::drop(user_data);
         }
 
-        if !user_data.is_null() {
-            unsafe { barvinok_sys::isl_id_set_free_user(handle, Some(cleanup_user_data)) };
+        let cstring = std::ffi::CString::new(name)?;
+
+        let user_data = Box::new(UserData {
+            get_as_any: get_as_any::<T>,
+            data: user_data,
+        });
+
+        let user_data = Box::into_raw(user_data) as *mut std::ffi::c_void;
+
+        let handle =
+            unsafe { barvinok_sys::isl_id_alloc(ctx.0.as_ptr(), cstring.as_ptr(), user_data) };
+
+        unsafe {
+            barvinok_sys::isl_id_set_free_user(handle, Some(drop::<T>));
         }
 
         let handle = nonnull_or_alloc_error(handle);
@@ -48,13 +71,15 @@ impl<'a> Ident<'a> {
             marker: std::marker::PhantomData,
         })
     }
+
     pub fn get_user_ref(&self) -> Option<&dyn Any> {
         let user_data = unsafe { barvinok_sys::isl_id_get_user(self.handle.as_ptr()) };
-        if user_data.is_null() {
-            None
-        } else {
-            Some(unsafe { &**(user_data as *const Box<dyn Any>) })
-        }
+        NonNull::new(user_data).map(|ptr| {
+            let cast_fn = ptr.cast::<CastFn>();
+            let cast_fn = unsafe { cast_fn.as_ref() };
+            let user_data = cast_fn(ptr);
+            unsafe { user_data.as_ref() }
+        })
     }
     pub fn get_user_as<T: Any>(&self) -> Option<&T> {
         self.get_user_ref()
@@ -141,8 +166,7 @@ mod tests {
     #[test]
     fn test_ident_with_user() {
         let ctx = Context::new();
-        let user_data = Box::new(42);
-        let ident = Ident::new_with_user(&ctx, "x", Some(user_data)).unwrap();
+        let ident = Ident::new_with_user(&ctx, "x", 42).unwrap();
         assert_eq!(ident.name().unwrap(), "x");
         assert_eq!(ident.context_ref().0.as_ptr(), ctx.0.as_ptr());
         assert_eq!(
@@ -162,8 +186,8 @@ mod tests {
             }
         }
         {
-            let user_data = Box::new(Test(drop_flag.clone()));
-            let ident = Ident::new_with_user(&ctx, "x", Some(user_data)).unwrap();
+            let user_data = Test(drop_flag.clone());
+            let ident = Ident::new_with_user(&ctx, "x", user_data).unwrap();
             let ident2 = ident.clone();
             let user = ident2.get_user_ref().unwrap();
             assert!(

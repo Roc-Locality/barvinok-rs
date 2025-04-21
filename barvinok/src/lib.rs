@@ -43,10 +43,8 @@ impl Default for Context {
 #[repr(transparent)]
 pub struct ContextRef<'a>(NonNull<barvinok_sys::isl_ctx>, PhantomData<*mut &'a ()>);
 
-impl std::ops::Deref for ContextRef<'_> {
-    type Target = Context;
-
-    fn deref(&self) -> &Self::Target {
+impl<'a> ContextRef<'a> {
+    pub fn as_ref(&self) -> &'a Context {
         unsafe { std::mem::transmute(self) }
     }
 }

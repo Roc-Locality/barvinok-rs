@@ -573,7 +573,7 @@ mod tests {
         let ctx = Context::new();
         let val = Value::new_si(&ctx, 42);
         let ctx_ref = val.context_ref();
-        let val2 = Value::new_si(&ctx_ref, 42);
+        let val2 = Value::new_si(ctx_ref.as_ref(), 42);
         assert_eq!(val2.numerator(), 42);
         assert_eq!(val2.denominator(), 1);
     }
