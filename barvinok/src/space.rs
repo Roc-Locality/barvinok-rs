@@ -54,6 +54,33 @@ impl<'a> Space<'a> {
             std::marker::PhantomData,
         )
     }
+
+    pub fn new_set(ctx: &'a Context, num_params: u32, num_dims: u32) -> Self {
+        let handle =
+            unsafe { barvinok_sys::isl_space_set_alloc(ctx.0.as_ptr(), num_params, num_dims) };
+        let handle = nonnull_or_alloc_error(handle);
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+
+    pub fn new_params(ctx: &'a Context, num_params: u32) -> Self {
+        let handle = unsafe { barvinok_sys::isl_space_params_alloc(ctx.0.as_ptr(), num_params) };
+        let handle = nonnull_or_alloc_error(handle);
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+    pub fn new_unit(ctx: &'a Context) -> Self {
+        let handle = unsafe { barvinok_sys::isl_space_unit(ctx.0.as_ptr()) };
+        let handle = nonnull_or_alloc_error(handle);
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -65,6 +92,27 @@ mod tests {
     fn test_space_creation() {
         let ctx = Context::new();
         let space = Space::new(&ctx, 2, 3);
+        println!("{:?}", space);
+    }
+
+    #[test]
+    fn test_space_params() {
+        let ctx = Context::new();
+        let space = Space::new_params(&ctx, 2);
+        println!("{:?}", space);
+    }
+
+    #[test]
+    fn test_space_unit() {
+        let ctx = Context::new();
+        let space = Space::new_unit(&ctx);
+        println!("{:?}", space);
+    }
+
+    #[test]
+    fn test_space_set() {
+        let ctx = Context::new();
+        let space = Space::new_set(&ctx, 2, 3);
         println!("{:?}", space);
     }
 }
