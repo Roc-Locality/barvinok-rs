@@ -403,42 +403,6 @@ impl_bin_op!(Sub, sub, isl_val_sub);
 impl_bin_op!(Mul, mul, isl_val_mul);
 impl_bin_op!(Div, div, isl_val_div);
 
-// ValueList
-#[repr(transparent)]
-pub struct ValueList<'a> {
-    handle: NonNull<barvinok_sys::isl_val_list>,
-    marker: std::marker::PhantomData<&'a ()>,
-}
-
-impl<'a> ValueList<'a> {
-    pub fn new(ctx: &'a Context, cap: usize) -> Self {
-        let handle = unsafe { barvinok_sys::isl_val_list_alloc(ctx.0.as_ptr(), cap as i32) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-
-    pub fn dump(&self) {
-        unsafe { barvinok_sys::isl_val_list_dump(self.handle.as_ptr()) }
-    }
-
-    pub fn add(&mut self, val: Value<'a>) {
-        let handle =
-            unsafe { barvinok_sys::isl_val_list_add(self.handle.as_ptr(), val.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(val);
-        self.handle = handle;
-    }
-}
-
-impl Drop for ValueList<'_> {
-    fn drop(&mut self) {
-        unsafe { barvinok_sys::isl_val_list_free(self.handle.as_ptr()) };
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::ops::Neg;
@@ -644,19 +608,21 @@ mod tests {
 
     #[test]
     fn test_dump_empty_list() {
+        type ValueList<'a> = crate::list::List<'a, Value<'a>>;
         let ctx = Context::new();
         let val_list = ValueList::new(&ctx, 9);
-        val_list.dump();
+        println!("val_list: {:?}", val_list);
     }
 
     #[test]
     fn test_add_to_list() {
+        type ValueList<'a> = crate::list::List<'a, Value<'a>>;
         let ctx = Context::new();
         let mut val_list = ValueList::new(&ctx, 9);
         let val1 = Value::new_si(&ctx, 42);
         let val2 = Value::new_si(&ctx, 7);
-        val_list.add(val1);
-        val_list.add(val2);
-        val_list.dump();
+        val_list.push(val1);
+        val_list.push(val2);
+        println!("val_list: {:?}", val_list);
     }
 }

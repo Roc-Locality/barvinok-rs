@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use barvinok_sys::isl_printer_flush;
 
 struct CookieFile<'a, W: std::fmt::Write> {
-    reference: &'a mut W,
+    _reference: &'a mut W,
     file: *mut barvinok_sys::FILE,
 }
 //        FILE *fopencookie(void *restrict cookie, const char *restrict mode,
@@ -59,7 +59,10 @@ impl<'a, W: std::fmt::Write> CookieFile<'a, W> {
                 cookie,
             )
         };
-        Self { reference, file }
+        Self {
+            _reference: reference,
+            file,
+        }
     }
 }
 

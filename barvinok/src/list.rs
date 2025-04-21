@@ -1,8 +1,8 @@
 use std::ptr::NonNull;
 
-use crate::{Context, ContextRef, nonnull_or_alloc_error};
+use crate::{Context, ContextRef, nonnull_or_alloc_error, printer::ISLPrint};
 
-trait ListRawAPI {
+pub trait ListRawAPI {
     type Handle;
     type ListHandle;
 
@@ -332,6 +332,32 @@ impl<'a, T: ListRawAPI + 'a> Clone for List<'a, T> {
             handle,
             marker: std::marker::PhantomData,
         }
+    }
+}
+
+impl<'a, T: ListRawAPI + 'a> ISLPrint<'a> for List<'a, T> {
+    type Handle = T::ListHandle;
+
+    fn context(&self) -> ContextRef<'a> {
+        self.context()
+    }
+
+    fn handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr() as *mut Self::Handle
+    }
+
+    unsafe fn isl_printer_print(
+        printer: *mut barvinok_sys::isl_printer,
+        handle: *mut Self::Handle,
+    ) -> *mut barvinok_sys::isl_printer {
+        unsafe { T::printer_print_list(printer, handle) }
+    }
+}
+
+impl<'a, T: ListRawAPI + 'a> std::fmt::Debug for List<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let wrapper = crate::printer::FmtWrapper::new(self);
+        std::fmt::Debug::fmt(&wrapper, f)
     }
 }
 
