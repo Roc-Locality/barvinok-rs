@@ -2,6 +2,7 @@ use std::ptr::NonNull;
 
 use crate::{Context, ContextRef, nonnull_or_alloc_error, printer::ISLPrint};
 
+#[allow(clippy::missing_safety_doc)]
 pub trait ListRawAPI {
     type Handle;
     type ListHandle;
@@ -283,6 +284,10 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
         unsafe { T::list_size(self.handle.as_ptr()) as usize }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn new_singleton(el: T) -> Self {
         let handle = unsafe { T::list_from_el(T::get_handle(&el)) };
         let handle = nonnull_or_alloc_error(handle);
@@ -343,7 +348,7 @@ impl<'a, T: ListRawAPI + 'a> ISLPrint<'a> for List<'a, T> {
     }
 
     fn handle(&self) -> *mut Self::Handle {
-        self.handle.as_ptr() as *mut Self::Handle
+        self.handle.as_ptr()
     }
 
     unsafe fn isl_printer_print(
