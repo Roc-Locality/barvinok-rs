@@ -167,14 +167,16 @@ mod tests {
             let ident2 = ident.clone();
             let user = ident2.get_user_ref().unwrap();
             assert!(
-                !user.downcast_ref::<Test>()
+                !user
+                    .downcast_ref::<Test>()
                     .unwrap()
                     .0
                     .load(std::sync::atomic::Ordering::SeqCst)
             );
             _ = ident2.get_user_arc().unwrap();
             assert!(
-                !user.downcast_ref::<Test>()
+                !user
+                    .downcast_ref::<Test>()
                     .unwrap()
                     .0
                     .load(std::sync::atomic::Ordering::SeqCst)
