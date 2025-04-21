@@ -1,7 +1,6 @@
 use crate::printer::ISLPrint;
 use crate::{Context, ContextRef, nonnull_or_alloc_error};
 use std::fmt::Debug;
-use std::sync::Arc;
 use std::{any::Any, ptr::NonNull};
 
 #[repr(transparent)]
@@ -20,10 +19,12 @@ impl<'a> Ident<'a> {
         user_data: Option<Box<dyn Any>>,
     ) -> Result<Self, crate::Error> {
         let user_data = user_data
-            .map(Arc::new)
-            .map(Arc::into_raw)
-            .unwrap_or_else(std::ptr::null);
+            .map(Box::new)
+            .map(Box::into_raw)
+            .unwrap_or_else(std::ptr::null_mut);
+
         let cstring = std::ffi::CString::new(name)?;
+
         let handle = unsafe {
             barvinok_sys::isl_id_alloc(
                 ctx.0.as_ptr(),
@@ -31,7 +32,17 @@ impl<'a> Ident<'a> {
                 user_data as *mut std::ffi::c_void,
             )
         };
+
+        unsafe extern "C" fn cleanup_user_data(user_data: *mut std::ffi::c_void) {
+            std::mem::drop(unsafe { Box::from_raw(user_data as *mut Box<dyn Any>) });
+        }
+
+        if !user_data.is_null() {
+            unsafe { barvinok_sys::isl_id_set_free_user(handle, Some(cleanup_user_data)) };
+        }
+
         let handle = nonnull_or_alloc_error(handle);
+
         Ok(Self {
             handle,
             marker: std::marker::PhantomData,
@@ -45,15 +56,9 @@ impl<'a> Ident<'a> {
             Some(unsafe { &**(user_data as *const Box<dyn Any>) })
         }
     }
-    pub fn get_user_arc(&self) -> Option<Arc<Box<dyn Any>>> {
-        let user_data = unsafe { barvinok_sys::isl_id_get_user(self.handle.as_ptr()) };
-        if user_data.is_null() {
-            None
-        } else {
-            unsafe { Arc::increment_strong_count(user_data as *const Box<dyn Any>) };
-            let arc = unsafe { Arc::from_raw(user_data as *const Box<dyn Any>) };
-            Some(arc)
-        }
+    pub fn get_user_as<T: Any>(&self) -> Option<&T> {
+        self.get_user_ref()
+            .and_then(|user_data| user_data.downcast_ref::<T>())
     }
     pub fn name(&self) -> Result<&str, crate::Error> {
         let cstr = unsafe { barvinok_sys::isl_id_get_name(self.handle.as_ptr()) };
@@ -76,22 +81,16 @@ impl<'a> Ident<'a> {
 impl Clone for Ident<'_> {
     fn clone(&self) -> Self {
         let handle = unsafe { barvinok_sys::isl_id_copy(self.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        let res = Self {
+        let handle = unsafe { NonNull::new_unchecked(handle) };
+        Self {
             handle,
             marker: std::marker::PhantomData,
-        };
-        std::mem::forget(self.get_user_arc());
-        res
+        }
     }
 }
 
 impl Drop for Ident<'_> {
     fn drop(&mut self) {
-        let user_data = unsafe { barvinok_sys::isl_id_get_user(self.handle.as_ptr()) };
-        if !user_data.is_null() {
-            std::mem::drop(unsafe { Arc::from_raw(user_data as *const Box<dyn Any>) });
-        }
         unsafe { barvinok_sys::isl_id_free(self.handle.as_ptr()) };
     }
 }
@@ -128,6 +127,7 @@ mod tests {
 
     use super::*;
     use crate::Context;
+    use std::sync::Arc;
 
     #[test]
     fn test_ident() {
@@ -173,10 +173,9 @@ mod tests {
                     .0
                     .load(std::sync::atomic::Ordering::SeqCst)
             );
-            _ = ident2.get_user_arc().unwrap();
             assert!(
-                !user
-                    .downcast_ref::<Test>()
+                !ident
+                    .get_user_as::<Test>()
                     .unwrap()
                     .0
                     .load(std::sync::atomic::Ordering::SeqCst)
