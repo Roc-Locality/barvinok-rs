@@ -35,16 +35,27 @@ impl Debug for Space<'_> {
     }
 }
 
-impl<'a> Space<'a> {
-    pub fn new(ctx: &'a Context, num_params: u32, num_dims: u32) -> Self {
-        let handle =
-            unsafe { barvinok_sys::isl_space_set_alloc(ctx.0.as_ptr(), num_params, num_dims) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
+macro_rules! space_constructor {
+    // Pattern with additional arguments
+    ($name:ident, $sys_fn:ident $(, $arg:ident : $arg_ty:ty)*) => {
+        pub fn $name(ctx: &'a Context $(, $arg: $arg_ty)*) -> Self {
+            let handle = unsafe {
+                barvinok_sys::$sys_fn(ctx.0.as_ptr() $(, $arg)*)
+            };
+            let handle = nonnull_or_alloc_error(handle);
+            Self {
+                handle,
+                marker: std::marker::PhantomData,
+            }
         }
-    }
+    };
+}
+
+impl<'a> Space<'a> {
+    space_constructor!(new,        isl_space_alloc,    num_params: u32, num_inputs: u32, num_outputs: u32);
+    space_constructor!(new_set,    isl_space_set_alloc,    num_params: u32, num_dims: u32);
+    space_constructor!(new_params, isl_space_params_alloc, num_params: u32);
+    space_constructor!(new_unit, isl_space_unit);
 
     pub fn context_ref(&self) -> ContextRef<'a> {
         ContextRef(
@@ -53,33 +64,6 @@ impl<'a> Space<'a> {
             },
             std::marker::PhantomData,
         )
-    }
-
-    pub fn new_set(ctx: &'a Context, num_params: u32, num_dims: u32) -> Self {
-        let handle =
-            unsafe { barvinok_sys::isl_space_set_alloc(ctx.0.as_ptr(), num_params, num_dims) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-
-    pub fn new_params(ctx: &'a Context, num_params: u32) -> Self {
-        let handle = unsafe { barvinok_sys::isl_space_params_alloc(ctx.0.as_ptr(), num_params) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-    pub fn new_unit(ctx: &'a Context) -> Self {
-        let handle = unsafe { barvinok_sys::isl_space_unit(ctx.0.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
     }
 }
 
@@ -91,7 +75,7 @@ mod tests {
     #[test]
     fn test_space_creation() {
         let ctx = Context::new();
-        let space = Space::new(&ctx, 2, 3);
+        let space = Space::new(&ctx, 2, 4, 3);
         println!("{:?}", space);
     }
 

@@ -1,5 +1,6 @@
 use std::{marker::PhantomData, ptr::NonNull};
 
+pub mod ident;
 pub mod list;
 mod printer;
 pub mod qpolynomial;
@@ -14,6 +15,10 @@ pub enum Error {
     NonIntegralValue,
     #[error("invalid string format")]
     ParseError,
+    #[error("nul character in string")]
+    NulError(#[from] std::ffi::NulError),
+    #[error("isl string is not valid utf8")]
+    Utf8Error(#[from] std::str::Utf8Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -18,6 +18,7 @@ fn main() {
         .header(format!("{}/include/barvinok/barvinok.h", dst.display()))
         .header(format!("{}/include/isl/val.h", dst.display()))
         .header(format!("{}/include/isl/space.h", dst.display()))
+        .header(format!("{}/include/isl/id.h", dst.display()))
         .clang_arg(format!("-I{}", include_dir.display()))
         // allow only those functions starts with barvinok and isl and recursively
         .allowlist_function("isl.*")
