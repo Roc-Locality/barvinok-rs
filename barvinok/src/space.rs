@@ -145,7 +145,7 @@ impl Drop for Space<'_> {
 impl Clone for Space<'_> {
     fn clone(&self) -> Self {
         let handle = unsafe { barvinok_sys::isl_space_copy(self.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
+        let handle = unsafe { NonNull::new_unchecked(handle) };
         Self {
             handle,
             marker: std::marker::PhantomData,
