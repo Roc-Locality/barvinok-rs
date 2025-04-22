@@ -1,3 +1,4 @@
+use crate::stat::Flag;
 use crate::value::Value;
 use std::fmt::Debug;
 use std::ptr::NonNull;
@@ -32,6 +33,58 @@ macro_rules! qpolynomial_constructors {
                     }
                 }
             )*
+        }
+    };
+}
+
+macro_rules! qpolynomial_flag {
+    ($name:ident, $sys_fn:ident) => {
+        pub fn $name(&self) -> bool {
+            let flag = unsafe { barvinok_sys::$sys_fn(self.handle.as_ptr()) };
+            let flag = Flag::from_isl_bool(flag);
+            matches!(flag, Flag::True)
+        }
+    };
+}
+
+macro_rules! impl_unary_op_qpolynomial_inline {
+    ($vis:vis $method:ident, $isl_fn:ident) => {
+        $vis fn $method(self) -> Self {
+            let handle = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr()) };
+            let handle = nonnull_or_alloc_error(handle);
+            std::mem::forget(self);
+            QuasiPolynomial {
+                handle,
+                marker: std::marker::PhantomData,
+            }
+        }
+    };
+}
+
+macro_rules! impl_bin_op_qpolynomial_inline {
+    ($vis:vis $method:ident, $isl_fn:ident, $other:ty) => {
+        $vis fn $method(self, other: $other) -> Self {
+            let handle =
+                unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other.handle.as_ptr()) };
+            let handle = nonnull_or_alloc_error(handle);
+            std::mem::forget(self);
+            std::mem::forget(other);
+            QuasiPolynomial {
+                handle,
+                marker: std::marker::PhantomData,
+            }
+        }
+    };
+    (trivial $vis:vis $method:ident, $isl_fn:ident, $other:ty) => {
+        $vis fn $method(self, other: $other) -> Self {
+            let handle =
+                unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other) };
+            let handle = nonnull_or_alloc_error(handle);
+            std::mem::forget(self);
+            QuasiPolynomial {
+                handle,
+                marker: std::marker::PhantomData,
+            }
         }
     };
 }
@@ -100,6 +153,23 @@ impl<'a> QuasiPolynomial<'a> {
             marker: std::marker::PhantomData,
         })
     }
+    pub fn get_constant_value(&self) -> Option<Value<'a>> {
+        let handle =
+            unsafe { barvinok_sys::isl_qpolynomial_get_constant_val(self.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Value {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    qpolynomial_flag!(is_zero, isl_qpolynomial_is_zero);
+    qpolynomial_flag!(is_infty, isl_qpolynomial_is_infty);
+    qpolynomial_flag!(is_neginfty, isl_qpolynomial_is_neginfty);
+    qpolynomial_flag!(is_nan, isl_qpolynomial_is_nan);
+    impl_bin_op_qpolynomial_inline!(trivial pub pow, isl_qpolynomial_pow, u32);
+    impl_bin_op_qpolynomial_inline!(pub scale_up_val, isl_qpolynomial_scale_val, Value<'a>);
+    impl_bin_op_qpolynomial_inline!(pub scale_down_val, isl_qpolynomial_scale_down_val, Value<'a>);
+    impl_unary_op_qpolynomial_inline!(pub domain_reverse, isl_qpolynomial_domain_reverse);
+    impl_unary_op_qpolynomial_inline!(pub homogenize, isl_qpolynomial_homogenize);
 }
 
 impl Clone for QuasiPolynomial<'_> {
@@ -144,6 +214,19 @@ impl Debug for QuasiPolynomial<'_> {
         Debug::fmt(&wrapper, f)
     }
 }
+
+macro_rules! impl_bin_op_qpolynomial {
+    ($trait:ident, $method:ident, $isl_fn:ident) => {
+        impl<'a> std::ops::$trait for QuasiPolynomial<'a> {
+            type Output = QuasiPolynomial<'a>;
+            impl_bin_op_qpolynomial_inline!($method, $isl_fn, Self::Output);
+        }
+    };
+}
+
+impl_bin_op_qpolynomial!(Add, add, isl_qpolynomial_add);
+impl_bin_op_qpolynomial!(Sub, sub, isl_qpolynomial_sub);
+impl_bin_op_qpolynomial!(Mul, mul, isl_qpolynomial_mul);
 
 #[cfg(test)]
 mod tests {
@@ -211,5 +294,30 @@ mod tests {
         let ctx = Context::new();
         let space = Space::new_set(&ctx, 1, 2);
         QuasiPolynomial::new_var_on_domain(space, DimType::Param, 2).unwrap();
+    }
+
+    #[test]
+    fn test_quasi_polynomial_add() {
+        let ctx = Context::new();
+        let space = Space::new_set(&ctx, 1, 2);
+        let qpoly1 = QuasiPolynomial::new_one_on_domain(space.clone());
+        let qpoly2 = QuasiPolynomial::new_zero_on_domain(space);
+        let qpoly3 = qpoly1 + qpoly2;
+        assert_eq!(qpoly3.context_ref().0.as_ptr(), ctx.0.as_ptr());
+        println!("{:?}", qpoly3);
+    }
+
+    #[test]
+    fn test_quasi_polynomial_sub() {
+        let ctx = Context::new();
+        let space = Space::new_set(&ctx, 1, 2);
+        let qpoly1 = QuasiPolynomial::new_zero_on_domain(space.clone());
+        let qpoly2 = QuasiPolynomial::new_one_on_domain(space);
+        let qpoly3 = qpoly1 - qpoly2;
+        assert_eq!(qpoly3.context_ref().0.as_ptr(), ctx.0.as_ptr());
+        println!("{:?}", qpoly3);
+        let val = qpoly3.get_constant_value();
+        assert!(val.is_some());
+        assert_eq!(val.unwrap().to_f64(), -1.0);
     }
 }

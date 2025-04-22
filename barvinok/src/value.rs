@@ -212,12 +212,10 @@ impl<'a> Value<'a> {
             return None;
         }
         let int_val = unsafe { barvinok_sys::isl_val_cmp_si(self.handle.as_ptr(), value) };
-        if int_val > 0 {
-            Some(std::cmp::Ordering::Greater)
-        } else if int_val < 0 {
-            Some(std::cmp::Ordering::Less)
-        } else {
-            Some(std::cmp::Ordering::Equal)
+        match int_val.cmp(&0) {
+            std::cmp::Ordering::Greater => Some(std::cmp::Ordering::Greater),
+            std::cmp::Ordering::Less => Some(std::cmp::Ordering::Less),
+            std::cmp::Ordering::Equal => Some(std::cmp::Ordering::Equal),
         }
     }
     impl_unary_method!(abs, isl_val_abs);

@@ -11,12 +11,10 @@ pub enum Flag {
 
 impl Flag {
     pub fn from_isl_bool(stat: isl_bool) -> Self {
-        if stat > 0 {
-            Flag::True
-        } else if stat == 0 {
-            Flag::False
-        } else {
-            Flag::Error
+        match stat.cmp(&0) {
+            std::cmp::Ordering::Greater => Flag::True,
+            std::cmp::Ordering::Less => Flag::False,
+            std::cmp::Ordering::Equal => Flag::Error,
         }
     }
 }
