@@ -2,8 +2,8 @@ use std::{marker::PhantomData, ptr::NonNull};
 
 pub mod ident;
 pub mod list;
+pub mod polynomial;
 mod printer;
-pub mod qpolynomial;
 pub mod space;
 pub mod value;
 
