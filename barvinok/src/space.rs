@@ -3,6 +3,7 @@ use std::{ffi::CStr, fmt::Debug};
 
 use barvinok_sys::isl_dim_type;
 
+use crate::DimType;
 use crate::{
     Context, ContextRef, ident::Ident, nonnull_or_alloc_error, printer::ISLPrint, stat::Flag,
 };
@@ -128,16 +129,28 @@ impl<'a> Space<'a> {
         };
         self.handle = nonnull_or_alloc_error(handle);
     }
+    pub fn get_dim(&self, dim_type: DimType) -> Option<u32> {
+        let dim =
+            unsafe { barvinok_sys::isl_space_dim(self.handle.as_ptr(), dim_type as isl_dim_type) };
+        if dim >= 0 { Some(dim as u32) } else { None }
+    }
 }
 
-#[repr(u32)]
-pub enum DimType {
-    Cst = barvinok_sys::isl_dim_type_isl_dim_cst,
-    Param = barvinok_sys::isl_dim_type_isl_dim_param,
-    In = barvinok_sys::isl_dim_type_isl_dim_in,
-    Out = barvinok_sys::isl_dim_type_isl_dim_out,
-    Div = barvinok_sys::isl_dim_type_isl_dim_div,
-    All = barvinok_sys::isl_dim_type_isl_dim_all,
+impl Drop for Space<'_> {
+    fn drop(&mut self) {
+        unsafe { barvinok_sys::isl_space_free(self.handle.as_ptr()) };
+    }
+}
+
+impl Clone for Space<'_> {
+    fn clone(&self) -> Self {
+        let handle = unsafe { barvinok_sys::isl_space_copy(self.handle.as_ptr()) };
+        let handle = nonnull_or_alloc_error(handle);
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
 }
 
 #[cfg(test)]

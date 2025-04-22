@@ -19,6 +19,8 @@ pub enum Error {
     NulError(#[from] std::ffi::NulError),
     #[error("isl string is not valid utf8")]
     Utf8Error(#[from] std::str::Utf8Error),
+    #[error("variable position out of bounds")]
+    VariablePositionOutOfBounds,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -43,6 +45,7 @@ impl Default for Context {
 #[repr(transparent)]
 pub struct ContextRef<'a>(NonNull<barvinok_sys::isl_ctx>, PhantomData<*mut &'a ()>);
 
+#[allow(clippy::should_implement_trait)]
 impl<'a> ContextRef<'a> {
     pub fn as_ref(&self) -> &'a Context {
         unsafe { std::mem::transmute(self) }
@@ -61,4 +64,15 @@ impl Context {
     pub fn reset_operations(&self) {
         unsafe { barvinok_sys::isl_ctx_reset_operations(self.0.as_ptr()) }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u32)]
+pub enum DimType {
+    Cst = barvinok_sys::isl_dim_type_isl_dim_cst,
+    Param = barvinok_sys::isl_dim_type_isl_dim_param,
+    In = barvinok_sys::isl_dim_type_isl_dim_in,
+    Out = barvinok_sys::isl_dim_type_isl_dim_out,
+    Div = barvinok_sys::isl_dim_type_isl_dim_div,
+    All = barvinok_sys::isl_dim_type_isl_dim_all,
 }
