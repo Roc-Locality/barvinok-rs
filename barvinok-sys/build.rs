@@ -8,8 +8,10 @@ fn main() {
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-lib=static=barvinok");
     println!("cargo:rustc-link-lib=static=isl");
+    println!("cargo:rustc-link-lib=static=polylibgmp");
     println!("cargo:rustc-link-lib=dylib=gmp");
     println!("cargo:rustc-link-lib=dylib=ntl");
+    println!("cargo:rustc-link-lib=dylib=stdc++");
     println!("cargo:rerun-if-changed=build.rs");
     let include_dir = dst.join("include");
     let bindings = bindgen::Builder::default()

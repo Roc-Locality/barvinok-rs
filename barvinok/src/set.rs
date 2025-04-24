@@ -1,7 +1,8 @@
-use std::ptr::NonNull;
+use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{
     DimType, impl_isl_print, nonnull_or_alloc_error,
+    polynomial::PiecewiseQuasiPolynomial,
     space::Space,
     stat::{ContextResult, isl_size_to_optional_u32},
 };
@@ -129,6 +130,15 @@ impl<'a> BasicSet<'a> {
     basic_set_unary!(affine_hull);
     basic_set_unary!(sample);
     basic_set_unary!(remove_redundancies);
+    pub fn cardinality(self) -> Option<PiecewiseQuasiPolynomial<'a>> {
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_basic_set_card(this.handle.as_ptr()) };
+        let handle = NonNull::new(handle)?;
+        Some(PiecewiseQuasiPolynomial {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
 }
 
 impl Drop for BasicSet<'_> {
@@ -187,5 +197,13 @@ mod test {
         let basic_set = BasicSet::new_positive_orthant(space.clone()).unwrap();
         let basic_set = basic_set.affine_hull().unwrap();
         println!("{:?}", basic_set);
+    }
+    #[test]
+    fn test_basic_set_cardinality() {
+        let ctx = Context::new();
+        let space = Space::new(&ctx, 0, 0, 3);
+        let basic_set = BasicSet::new_universe(space.clone()).unwrap();
+        let card = basic_set.cardinality();
+        println!("{:?}", card);
     }
 }

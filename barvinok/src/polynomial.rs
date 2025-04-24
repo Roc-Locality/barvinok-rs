@@ -11,8 +11,8 @@ pub struct QuasiPolynomial<'a> {
 
 #[repr(transparent)]
 pub struct PiecewiseQuasiPolynomial<'a> {
-    handle: NonNull<barvinok_sys::isl_pw_qpolynomial>,
-    marker: std::marker::PhantomData<&'a ()>,
+    pub(crate) handle: NonNull<barvinok_sys::isl_pw_qpolynomial>,
+    pub(crate) marker: std::marker::PhantomData<&'a ()>,
 }
 
 macro_rules! qpolynomial_constructors {
