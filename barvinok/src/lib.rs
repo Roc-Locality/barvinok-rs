@@ -4,10 +4,45 @@ pub mod ident;
 pub mod list;
 pub mod polynomial;
 mod printer;
+pub mod set;
 pub mod space;
 pub mod value;
 
 mod stat;
+
+#[derive(Debug, thiserror::Error)]
+#[repr(u32)]
+pub enum ISLError {
+    #[error("operation aborted")]
+    Abort = barvinok_sys::isl_error_isl_error_abort,
+    #[error("memory allocation error")]
+    Alloc = barvinok_sys::isl_error_isl_error_alloc,
+    #[error("unknown error")]
+    Unknown = barvinok_sys::isl_error_isl_error_unknown,
+    #[error("internal error")]
+    Internal = barvinok_sys::isl_error_isl_error_internal,
+    #[error("invalid argument")]
+    Invalid = barvinok_sys::isl_error_isl_error_invalid,
+    #[error("operation quota exceeded")]
+    Quota = barvinok_sys::isl_error_isl_error_quota,
+    #[error("unsupported operation")]
+    Unsupported = barvinok_sys::isl_error_isl_error_unsupported,
+}
+
+impl From<barvinok_sys::isl_error> for ISLError {
+    fn from(value: barvinok_sys::isl_error) -> Self {
+        match value {
+            barvinok_sys::isl_error_isl_error_abort => ISLError::Abort,
+            barvinok_sys::isl_error_isl_error_alloc => ISLError::Alloc,
+            barvinok_sys::isl_error_isl_error_unknown => ISLError::Unknown,
+            barvinok_sys::isl_error_isl_error_internal => ISLError::Internal,
+            barvinok_sys::isl_error_isl_error_invalid => ISLError::Invalid,
+            barvinok_sys::isl_error_isl_error_quota => ISLError::Quota,
+            barvinok_sys::isl_error_isl_error_unsupported => ISLError::Unsupported,
+            _ => ISLError::Unknown,
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -21,6 +56,8 @@ pub enum Error {
     Utf8Error(#[from] std::str::Utf8Error),
     #[error("variable position out of bounds")]
     VariablePositionOutOfBounds,
+    #[error("isl error: {0}")]
+    IslError(#[from] ISLError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -63,6 +100,17 @@ impl Context {
     }
     pub fn reset_operations(&self) {
         unsafe { barvinok_sys::isl_ctx_reset_operations(self.0.as_ptr()) }
+    }
+    pub fn last_error(&self) -> Option<ISLError> {
+        let err = unsafe { barvinok_sys::isl_ctx_last_error(self.0.as_ptr()) };
+        if err == barvinok_sys::isl_error_isl_error_none {
+            None
+        } else {
+            Some(err.into())
+        }
+    }
+    pub fn last_error_or_unknown(&self) -> ISLError {
+        self.last_error().unwrap_or(ISLError::Unknown)
     }
 }
 

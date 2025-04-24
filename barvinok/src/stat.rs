@@ -1,38 +1,24 @@
-use std::ops::Not;
-
 use barvinok_sys::isl_bool;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum Flag {
-    True,
-    False,
-    Error,
-}
+use crate::{ContextRef, ISLError};
 
-impl Flag {
-    pub fn from_isl_bool(stat: isl_bool) -> Self {
-        match stat.cmp(&0) {
-            std::cmp::Ordering::Greater => Flag::True,
-            std::cmp::Ordering::Less => Flag::False,
-            std::cmp::Ordering::Equal => Flag::Error,
-        }
+pub(crate) fn isl_bool_to_optional_bool(b: isl_bool) -> Option<bool> {
+    match b.cmp(&0) {
+        std::cmp::Ordering::Less => None,
+        std::cmp::Ordering::Equal => Some(false),
+        std::cmp::Ordering::Greater => Some(true),
     }
 }
 
-impl From<bool> for Flag {
-    fn from(value: bool) -> Self {
-        if value { Flag::True } else { Flag::False }
-    }
+pub(crate) trait ContextResult<T> {
+    fn context_result<'a>(self, ctx: ContextRef<'a>) -> Result<T, ISLError>;
 }
 
-impl Not for Flag {
-    type Output = Self;
-
-    fn not(self) -> Self::Output {
+impl ContextResult<bool> for Option<bool> {
+    fn context_result<'a>(self, ctx: ContextRef<'a>) -> Result<bool, ISLError> {
         match self {
-            Flag::True => Flag::False,
-            Flag::False => Flag::True,
-            Flag::Error => Flag::Error,
+            Some(x) => Ok(x),
+            None => Err(ctx.as_ref().last_error_or_unknown()),
         }
     }
 }

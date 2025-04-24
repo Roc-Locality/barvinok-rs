@@ -2,7 +2,11 @@ use std::{fmt::Debug, ptr::NonNull};
 
 use num_traits::PrimInt;
 
-use crate::{Context, ContextRef, nonnull_or_alloc_error, printer::ISLPrint, stat::Flag};
+use crate::{
+    Context, ContextRef, nonnull_or_alloc_error,
+    printer::ISLPrint,
+    stat::{ContextResult, isl_bool_to_optional_bool},
+};
 
 #[repr(transparent)]
 pub struct Value<'a> {
@@ -51,9 +55,9 @@ macro_rules! isl_val_new {
 
 macro_rules! impl_special_val_check {
     ($method:ident, $isl_fn:ident) => {
-        pub fn $method(&self) -> bool {
+        pub fn $method(&self) -> Option<bool> {
             let flag = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr()) };
-            matches!(Flag::from_isl_bool(flag), Flag::True)
+            isl_bool_to_optional_bool(flag)
         }
     };
 }
@@ -172,18 +176,16 @@ impl<'a> Value<'a> {
         unsafe { barvinok_sys::isl_val_get_d(self.handle.as_ptr()) }
     }
 
-    pub fn abs_eq(&self, other: &Self) -> bool {
+    pub fn abs_eq(&self, other: &Self) -> Option<bool> {
         let flag =
             unsafe { barvinok_sys::isl_val_abs_eq(self.handle.as_ptr(), other.handle.as_ptr()) };
-        let flag = Flag::from_isl_bool(flag);
-        matches!(flag, Flag::True)
+        isl_bool_to_optional_bool(flag)
     }
-    pub fn divisible_by(&self, other: &Self) -> bool {
+    pub fn divisible_by(&self, other: &Self) -> Option<bool> {
         let flag = unsafe {
             barvinok_sys::isl_val_is_divisible_by(self.handle.as_ptr(), other.handle.as_ptr())
         };
-        let flag = Flag::from_isl_bool(flag);
-        matches!(flag, Flag::True)
+        isl_bool_to_optional_bool(flag)
     }
 
     impl_special_val_check!(is_zero, isl_val_is_zero);
@@ -197,18 +199,16 @@ impl<'a> Value<'a> {
     impl_special_val_check!(is_int, isl_val_is_int);
     impl_special_val_check!(is_rat, isl_val_is_rat);
 
-    pub fn gt_si(&self, value: i64) -> bool {
+    pub fn gt_si(&self, value: i64) -> Option<bool> {
         let flag = unsafe { barvinok_sys::isl_val_gt_si(self.handle.as_ptr(), value) };
-        let flag = Flag::from_isl_bool(flag);
-        matches!(flag, Flag::True)
+        isl_bool_to_optional_bool(flag)
     }
-    pub fn eq_si(&self, value: i64) -> bool {
+    pub fn eq_si(&self, value: i64) -> Option<bool> {
         let flag = unsafe { barvinok_sys::isl_val_eq_si(self.handle.as_ptr(), value) };
-        let flag = Flag::from_isl_bool(flag);
-        matches!(flag, Flag::True)
+        isl_bool_to_optional_bool(flag)
     }
     pub fn cmp_si(&self, value: i64) -> Option<std::cmp::Ordering> {
-        if self.is_nan() {
+        if self.is_nan()? {
             return None;
         }
         let int_val = unsafe { barvinok_sys::isl_val_cmp_si(self.handle.as_ptr(), value) };
@@ -232,7 +232,7 @@ impl<'a> Value<'a> {
     impl_binary_method_ui!(div_ui, isl_val_div_ui);
 
     pub fn checked_exp2(self) -> crate::Result<Self> {
-        if !self.is_int() {
+        if !self.is_int().context_result(self.context_ref())? {
             return Err(crate::Error::NonIntegralValue);
         }
         let handle = unsafe { barvinok_sys::isl_val_pow2(self.handle.as_ptr()) };
@@ -244,7 +244,9 @@ impl<'a> Value<'a> {
         })
     }
     pub fn checked_rem(self, other: Self) -> crate::Result<Self> {
-        if !self.is_int() || !other.is_int() {
+        if !self.is_int().context_result(self.context_ref())?
+            || !other.is_int().context_result(self.context_ref())?
+        {
             return Err(crate::Error::NonIntegralValue);
         }
         let handle =
@@ -258,7 +260,9 @@ impl<'a> Value<'a> {
         })
     }
     pub fn checked_gcd(self, other: Self) -> crate::Result<Self> {
-        if !self.is_int() || !other.is_int() {
+        if !self.is_int().context_result(self.context_ref())?
+            || !other.is_int().context_result(self.context_ref())?
+        {
             return Err(crate::Error::NonIntegralValue);
         }
         let handle =
@@ -272,7 +276,9 @@ impl<'a> Value<'a> {
         })
     }
     pub fn checked_exgcd(self, other: Self) -> crate::Result<(Self, Self, Self)> {
-        if !self.is_int() || !other.is_int() {
+        if !self.is_int().context_result(self.context_ref())?
+            || !other.is_int().context_result(self.context_ref())?
+        {
             return Err(crate::Error::NonIntegralValue);
         }
         let mut x = std::ptr::null_mut();
@@ -334,7 +340,9 @@ macro_rules! impl_cmp_method {
         fn $method(&self, other: &Self) -> bool {
             let flag =
                 unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other.handle.as_ptr()) };
-            matches!(Flag::from_isl_bool(flag), Flag::True)
+            isl_bool_to_optional_bool(flag)
+                .context_result(self.context_ref())
+                .unwrap()
         }
     };
 }
@@ -439,7 +447,7 @@ mod tests {
         let ctx = Context::new();
         let val1 = Value::new_si(&ctx, 42);
         let val2 = Value::new_si(&ctx, -42);
-        assert!(val1.abs_eq(&val2));
+        assert!(val1.abs_eq(&val2).unwrap());
     }
 
     #[test]
@@ -466,23 +474,23 @@ mod tests {
         let val_infty = Value::new_infty(&ctx);
         let val_neg_infty = Value::new_neg_infty(&ctx);
 
-        assert!(val_zero.is_zero());
-        assert!(val_one.is_one());
-        assert!(val_negone.is_negone());
-        assert!(val_nan.is_nan());
-        assert!(val_infty.is_infty());
-        assert!(val_neg_infty.is_neg_infty());
+        assert!(val_zero.is_zero().unwrap());
+        assert!(val_one.is_one().unwrap());
+        assert!(val_negone.is_negone().unwrap());
+        assert!(val_nan.is_nan().unwrap());
+        assert!(val_infty.is_infty().unwrap());
+        assert!(val_neg_infty.is_neg_infty().unwrap());
 
         // some random cross checkings
-        assert!(!val_zero.is_one());
-        assert!(!val_one.is_zero());
-        assert!(!val_zero.is_nan());
-        assert!(!val_one.is_nan());
-        assert!(!val_zero.is_infty());
-        assert!(!val_one.is_infty());
-        assert!(!val_zero.is_neg_infty());
-        assert!(!val_one.is_neg_infty());
-        assert!(!val_nan.is_zero());
+        assert!(!val_zero.is_one().unwrap());
+        assert!(!val_one.is_zero().unwrap());
+        assert!(!val_zero.is_nan().unwrap());
+        assert!(!val_one.is_nan().unwrap());
+        assert!(!val_zero.is_infty().unwrap());
+        assert!(!val_one.is_infty().unwrap());
+        assert!(!val_zero.is_neg_infty().unwrap());
+        assert!(!val_one.is_neg_infty().unwrap());
+        assert!(!val_nan.is_zero().unwrap());
     }
 
     #[test]
@@ -490,8 +498,8 @@ mod tests {
         let ctx = Context::new();
         let val1 = Value::new_si(&ctx, 42);
         let val2 = Value::new_si(&ctx, 7);
-        assert!(val1.divisible_by(&val2));
-        assert!(!val2.divisible_by(&val1));
+        assert!(val1.divisible_by(&val2).unwrap());
+        assert!(!val2.divisible_by(&val1).unwrap());
     }
 
     #[test]
@@ -594,10 +602,10 @@ mod tests {
         assert_eq!(val.to_f64(), 42.0);
 
         let val = Value::new_from_string(&ctx, "nan");
-        assert!(val.unwrap().is_nan());
+        assert!(val.unwrap().is_nan().unwrap());
 
         let val = Value::new_from_string(&ctx, "infty");
-        assert!(val.unwrap().is_infty());
+        assert!(val.unwrap().is_infty().unwrap());
 
         let val = Value::new_from_string(&ctx, "5/12").unwrap();
         assert_eq!(val.numerator(), 5);

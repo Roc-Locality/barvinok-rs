@@ -5,7 +5,8 @@ use barvinok_sys::isl_dim_type;
 
 use crate::DimType;
 use crate::{
-    Context, ContextRef, ident::Ident, nonnull_or_alloc_error, printer::ISLPrint, stat::Flag,
+    Context, ContextRef, ident::Ident, nonnull_or_alloc_error, printer::ISLPrint,
+    stat::isl_bool_to_optional_bool,
 };
 
 #[repr(transparent)]
@@ -58,10 +59,9 @@ macro_rules! space_constructor {
 
 macro_rules! space_flag {
     ($name:ident, $sys_fn:ident) => {
-        pub fn $name(&self) -> bool {
+        pub fn $name(&self) -> Option<bool> {
             let flag = unsafe { barvinok_sys::$sys_fn(self.handle.as_ptr()) };
-            let flag = Flag::from_isl_bool(flag);
-            matches!(flag, Flag::True)
+            isl_bool_to_optional_bool(flag)
         }
     };
 }
@@ -106,12 +106,11 @@ impl<'a> Space<'a> {
         self.handle = nonnull_or_alloc_error(handle);
         Ok(())
     }
-    pub fn has_tuple_name(&self, dim_type: DimType) -> bool {
+    pub fn has_tuple_name(&self, dim_type: DimType) -> Option<bool> {
         let flag = unsafe {
             barvinok_sys::isl_space_has_tuple_name(self.handle.as_ptr(), dim_type as isl_dim_type)
         };
-        let flag = Flag::from_isl_bool(flag);
-        matches!(flag, Flag::True)
+        isl_bool_to_optional_bool(flag)
     }
     pub fn get_tuple_name(&self, dim_type: DimType) -> Result<&str, crate::Error> {
         let cstr = self.get_tuple_name_cstr(dim_type);
@@ -201,7 +200,7 @@ mod tests {
         let mut space = Space::new_set(&ctx, 2, 4);
         space.set_tuple_name(DimType::In, "input").unwrap();
         println!("{:?}", space);
-        assert!(space.has_tuple_name(DimType::In));
+        assert!(space.has_tuple_name(DimType::In).unwrap());
         assert_eq!(space.get_tuple_name(DimType::In).unwrap(), "input");
     }
 
@@ -209,9 +208,9 @@ mod tests {
     fn test_space_add_dims() {
         let ctx = Context::new();
         let mut space = Space::new_set(&ctx, 2, 4);
-        assert!(space.is_set());
+        assert!(space.is_set().unwrap());
         space.add_dims(DimType::In, 2);
         println!("{:?}", space);
-        assert!(space.is_map());
+        assert!(space.is_map().unwrap());
     }
 }
