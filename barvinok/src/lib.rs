@@ -1,7 +1,10 @@
 use std::{marker::PhantomData, ptr::NonNull};
 
+use barvinok_sys::isl_options_set_on_error;
+
 pub mod ident;
 pub mod list;
+pub mod map;
 pub mod polynomial;
 mod printer;
 pub mod set;
@@ -92,7 +95,11 @@ impl<'a> ContextRef<'a> {
 impl Context {
     pub fn new() -> Self {
         let ctx = unsafe { barvinok_sys::isl_ctx_alloc() };
+        unsafe {
+            isl_options_set_on_error(ctx, 0);
+        }
         let ctx = nonnull_or_alloc_error(ctx);
+
         Self(ctx)
     }
     pub fn set_max_operations(&self, max_operations: usize) {

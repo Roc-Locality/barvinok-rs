@@ -1,13 +1,13 @@
+use std::ffi::CStr;
 use std::ptr::NonNull;
-use std::{ffi::CStr, fmt::Debug};
 
 use barvinok_sys::isl_dim_type;
 
-use crate::DimType;
+use crate::stat::isl_size_to_optional_u32;
 use crate::{
-    Context, ContextRef, ident::Ident, nonnull_or_alloc_error, printer::ISLPrint,
-    stat::isl_bool_to_optional_bool,
+    Context, ContextRef, ident::Ident, nonnull_or_alloc_error, stat::isl_bool_to_optional_bool,
 };
+use crate::{DimType, impl_isl_print};
 
 #[repr(transparent)]
 pub struct Space<'a> {
@@ -15,31 +15,7 @@ pub struct Space<'a> {
     pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
 }
 
-impl<'a> ISLPrint<'a> for Space<'a> {
-    type Handle = barvinok_sys::isl_space;
-
-    fn context(&self) -> ContextRef<'a> {
-        self.context_ref()
-    }
-
-    fn handle(&self) -> *mut Self::Handle {
-        self.handle.as_ptr()
-    }
-
-    unsafe fn isl_printer_print(
-        printer: *mut barvinok_sys::isl_printer,
-        handle: *mut Self::Handle,
-    ) -> *mut barvinok_sys::isl_printer {
-        unsafe { barvinok_sys::isl_printer_print_space(printer, handle) }
-    }
-}
-
-impl Debug for Space<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let wrapper = crate::printer::FmtWrapper::new(self);
-        Debug::fmt(&wrapper, f)
-    }
-}
+impl_isl_print!(Space, isl_space, isl_printer_print_space);
 
 macro_rules! space_constructor {
     // Pattern with additional arguments
@@ -131,7 +107,7 @@ impl<'a> Space<'a> {
     pub fn get_dim(&self, dim_type: DimType) -> Option<u32> {
         let dim =
             unsafe { barvinok_sys::isl_space_dim(self.handle.as_ptr(), dim_type as isl_dim_type) };
-        if dim >= 0 { Some(dim as u32) } else { None }
+        isl_size_to_optional_u32(dim)
     }
 }
 

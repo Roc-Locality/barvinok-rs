@@ -1,8 +1,7 @@
-use crate::{stat::isl_bool_to_optional_bool, value::Value};
-use std::fmt::Debug;
+use crate::{impl_isl_print, stat::isl_bool_to_optional_bool, value::Value};
 use std::ptr::NonNull;
 
-use crate::{ContextRef, DimType, nonnull_or_alloc_error, printer::ISLPrint, space::Space};
+use crate::{ContextRef, DimType, nonnull_or_alloc_error, space::Space};
 
 #[repr(transparent)]
 pub struct QuasiPolynomial<'a> {
@@ -196,32 +195,6 @@ impl Drop for QuasiPolynomial<'_> {
     }
 }
 
-impl<'a> ISLPrint<'a> for QuasiPolynomial<'a> {
-    type Handle = barvinok_sys::isl_qpolynomial;
-
-    fn context(&self) -> ContextRef<'a> {
-        self.context_ref()
-    }
-
-    fn handle(&self) -> *mut Self::Handle {
-        self.handle.as_ptr()
-    }
-
-    unsafe fn isl_printer_print(
-        printer: *mut barvinok_sys::isl_printer,
-        handle: *mut Self::Handle,
-    ) -> *mut barvinok_sys::isl_printer {
-        unsafe { barvinok_sys::isl_printer_print_qpolynomial(printer, handle) }
-    }
-}
-
-impl Debug for QuasiPolynomial<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let wrapper = crate::printer::FmtWrapper::new(self);
-        Debug::fmt(&wrapper, f)
-    }
-}
-
 macro_rules! impl_bin_op_qpolynomial {
     ($trait:ident, $method:ident, $isl_fn:ident) => {
         impl<'a> std::ops::$trait for QuasiPolynomial<'a> {
@@ -299,30 +272,17 @@ impl Drop for PiecewiseQuasiPolynomial<'_> {
         unsafe { barvinok_sys::isl_pw_qpolynomial_free(self.handle.as_ptr()) };
     }
 }
-impl<'a> ISLPrint<'a> for PiecewiseQuasiPolynomial<'a> {
-    type Handle = barvinok_sys::isl_pw_qpolynomial;
 
-    fn context(&self) -> ContextRef<'a> {
-        self.context_ref()
-    }
-
-    fn handle(&self) -> *mut Self::Handle {
-        self.handle.as_ptr()
-    }
-
-    unsafe fn isl_printer_print(
-        printer: *mut barvinok_sys::isl_printer,
-        handle: *mut Self::Handle,
-    ) -> *mut barvinok_sys::isl_printer {
-        unsafe { barvinok_sys::isl_printer_print_pw_qpolynomial(printer, handle) }
-    }
-}
-impl Debug for PiecewiseQuasiPolynomial<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let wrapper = crate::printer::FmtWrapper::new(self);
-        Debug::fmt(&wrapper, f)
-    }
-}
+impl_isl_print!(
+    QuasiPolynomial,
+    isl_qpolynomial,
+    isl_printer_print_qpolynomial
+);
+impl_isl_print!(
+    PiecewiseQuasiPolynomial,
+    isl_pw_qpolynomial,
+    isl_printer_print_pw_qpolynomial
+);
 
 #[cfg(test)]
 mod tests {

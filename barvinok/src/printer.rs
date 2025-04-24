@@ -118,3 +118,34 @@ where
         Debug::fmt(self, f)
     }
 }
+
+#[macro_export]
+macro_rules! impl_isl_print {
+    ($Rust:ident, $isl:ident, $print_fn:ident) => {
+        impl<'a> $crate::printer::ISLPrint<'a> for $Rust<'a> {
+            type Handle = barvinok_sys::$isl;
+
+            fn context(&self) -> $crate::ContextRef<'a> {
+                self.context_ref()
+            }
+
+            fn handle(&self) -> *mut Self::Handle {
+                self.handle.as_ptr()
+            }
+
+            unsafe fn isl_printer_print(
+                printer: *mut barvinok_sys::isl_printer,
+                handle: *mut Self::Handle,
+            ) -> *mut barvinok_sys::isl_printer {
+                unsafe { barvinok_sys::$print_fn(printer, handle) }
+            }
+        }
+
+        impl std::fmt::Debug for $Rust<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let wrapper = $crate::printer::FmtWrapper::new(self);
+                std::fmt::Debug::fmt(&wrapper, f)
+            }
+        }
+    };
+}

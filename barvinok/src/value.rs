@@ -1,10 +1,9 @@
-use std::{fmt::Debug, ptr::NonNull};
+use std::ptr::NonNull;
 
 use num_traits::PrimInt;
 
 use crate::{
-    Context, ContextRef, nonnull_or_alloc_error,
-    printer::ISLPrint,
+    Context, ContextRef, impl_isl_print, nonnull_or_alloc_error,
     stat::{ContextResult, isl_bool_to_optional_bool},
 };
 
@@ -14,31 +13,7 @@ pub struct Value<'a> {
     pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
 }
 
-impl<'a> ISLPrint<'a> for Value<'a> {
-    type Handle = barvinok_sys::isl_val;
-
-    fn context(&self) -> ContextRef<'a> {
-        self.context_ref()
-    }
-
-    fn handle(&self) -> *mut Self::Handle {
-        self.handle.as_ptr()
-    }
-
-    unsafe fn isl_printer_print(
-        printer: *mut barvinok_sys::isl_printer,
-        handle: *mut Self::Handle,
-    ) -> *mut barvinok_sys::isl_printer {
-        unsafe { barvinok_sys::isl_printer_print_val(printer, handle) }
-    }
-}
-
-impl Debug for Value<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let wrapper = crate::printer::FmtWrapper::new(self);
-        Debug::fmt(&wrapper, f)
-    }
-}
+impl_isl_print!(Value, isl_val, isl_printer_print_val);
 
 macro_rules! isl_val_new {
     ($name:ident, $func:ident $(, $arg_name:ident : $arg_ty:ty)*) => {
