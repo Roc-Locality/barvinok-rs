@@ -23,8 +23,8 @@ macro_rules! qpolynomial_constructors {
                     let handle = unsafe {
                         barvinok_sys::[<isl_qpolynomial_ $func _on_domain>](space.handle.as_ptr())
                     };
-                    let handle = nonnull_or_alloc_error(handle);
                     std::mem::forget(space);
+                    let handle = nonnull_or_alloc_error(handle);
                     QuasiPolynomial {
                         handle,
                         marker: std::marker::PhantomData,
@@ -48,8 +48,8 @@ macro_rules! impl_unary_op_qpolynomial_inline {
     ($vis:vis $method:ident, $isl_fn:ident) => {
         $vis fn $method(self) -> Self {
             let handle = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr()) };
-            let handle = nonnull_or_alloc_error(handle);
             std::mem::forget(self);
+            let handle = nonnull_or_alloc_error(handle);
             QuasiPolynomial {
                 handle,
                 marker: std::marker::PhantomData,
@@ -63,8 +63,8 @@ macro_rules! impl_bin_op_qpolynomial_inline {
         $vis fn $method(self, other: $other) -> Self {
             let handle =
                 unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other.handle.as_ptr()) };
-            let handle = nonnull_or_alloc_error(handle);
             std::mem::forget(self);
+            let handle = nonnull_or_alloc_error(handle);
             std::mem::forget(other);
             QuasiPolynomial {
                 handle,
@@ -76,8 +76,8 @@ macro_rules! impl_bin_op_qpolynomial_inline {
         $vis fn $method(self, other: $other) -> Self {
             let handle =
                 unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other) };
-            let handle = nonnull_or_alloc_error(handle);
             std::mem::forget(self);
+            let handle = nonnull_or_alloc_error(handle);
             QuasiPolynomial {
                 handle,
                 marker: std::marker::PhantomData,

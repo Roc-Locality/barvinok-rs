@@ -290,8 +290,8 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
 
     pub fn new_singleton(el: T) -> Self {
         let handle = unsafe { T::list_from_el(T::get_handle(&el)) };
-        let handle = nonnull_or_alloc_error(handle);
         std::mem::forget(el);
+        let handle = nonnull_or_alloc_error(handle);
         Self {
             handle,
             marker: std::marker::PhantomData,
@@ -300,8 +300,8 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
 
     pub fn push(&mut self, el: T) {
         let handle = unsafe { T::list_add(self.handle.as_ptr(), T::get_handle(&el)) };
-        let handle = nonnull_or_alloc_error(handle);
         std::mem::forget(el);
+        let handle = nonnull_or_alloc_error(handle);
         self.handle = handle;
     }
 
@@ -317,8 +317,8 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
     pub fn set(&mut self, index: usize, el: T) {
         let handle =
             unsafe { T::list_set_at(self.handle.as_ptr(), index as i32, T::get_handle(&el)) };
-        let handle = nonnull_or_alloc_error(handle);
         std::mem::forget(el);
+        let handle = nonnull_or_alloc_error(handle);
         self.handle = handle;
     }
 }

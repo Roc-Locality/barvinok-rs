@@ -41,8 +41,8 @@ macro_rules! impl_unary_method {
     ($method:ident, $isl_fn:ident) => {
         pub fn $method(self) -> Self {
             let handle = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr()) };
-            let handle = nonnull_or_alloc_error(handle);
             std::mem::forget(self);
+            let handle = nonnull_or_alloc_error(handle);
             Self {
                 handle,
                 marker: std::marker::PhantomData,
@@ -71,8 +71,8 @@ macro_rules! impl_binary_method_ui {
     ($method:ident, $isl_fn:ident) => {
         pub fn $method(self, val: u64) -> Self {
             let handle = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), val) };
-            let handle = nonnull_or_alloc_error(handle);
             std::mem::forget(self);
+            let handle = nonnull_or_alloc_error(handle);
             Self {
                 handle,
                 marker: std::marker::PhantomData,
