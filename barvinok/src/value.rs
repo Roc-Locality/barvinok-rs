@@ -7,6 +7,8 @@ use crate::{
     stat::{ContextResult, isl_bool_to_optional_bool},
 };
 
+use std::mem::ManuallyDrop;
+
 #[repr(transparent)]
 pub struct Value<'a> {
     pub(crate) handle: NonNull<barvinok_sys::isl_val>,
@@ -40,8 +42,8 @@ macro_rules! impl_special_val_check {
 macro_rules! impl_unary_method {
     ($method:ident, $isl_fn:ident) => {
         pub fn $method(self) -> Self {
-            let handle = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr()) };
-            std::mem::forget(self);
+            let this = ManuallyDrop::new(self);
+            let handle = unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr()) };
             let handle = nonnull_or_alloc_error(handle);
             Self {
                 handle,
@@ -54,10 +56,10 @@ macro_rules! impl_unary_method {
 macro_rules! impl_binary_method {
     ($method:ident, $isl_fn:ident) => {
         pub fn $method(self, other: Self) -> Self {
+            let this = ManuallyDrop::new(self);
+            let other = ManuallyDrop::new(other);
             let handle =
-                unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other.handle.as_ptr()) };
-            std::mem::forget(self);
-            std::mem::forget(other);
+                unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr(), other.handle.as_ptr()) };
             let handle = nonnull_or_alloc_error(handle);
             Self {
                 handle,
@@ -70,8 +72,8 @@ macro_rules! impl_binary_method {
 macro_rules! impl_binary_method_ui {
     ($method:ident, $isl_fn:ident) => {
         pub fn $method(self, val: u64) -> Self {
-            let handle = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), val) };
-            std::mem::forget(self);
+            let this = ManuallyDrop::new(self);
+            let handle = unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr(), val) };
             let handle = nonnull_or_alloc_error(handle);
             Self {
                 handle,
@@ -210,9 +212,9 @@ impl<'a> Value<'a> {
         if !self.is_int().context_result(self.context_ref())? {
             return Err(crate::Error::NonIntegralValue);
         }
-        let handle = unsafe { barvinok_sys::isl_val_pow2(self.handle.as_ptr()) };
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_val_pow2(this.handle.as_ptr()) };
         let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(self);
         Ok(Self {
             handle,
             marker: std::marker::PhantomData,
@@ -224,11 +226,11 @@ impl<'a> Value<'a> {
         {
             return Err(crate::Error::NonIntegralValue);
         }
+        let this = ManuallyDrop::new(self);
+        let other = ManuallyDrop::new(other);
         let handle =
-            unsafe { barvinok_sys::isl_val_mod(self.handle.as_ptr(), other.handle.as_ptr()) };
+            unsafe { barvinok_sys::isl_val_mod(this.handle.as_ptr(), other.handle.as_ptr()) };
         let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(self);
-        std::mem::forget(other);
         Ok(Self {
             handle,
             marker: std::marker::PhantomData,
@@ -240,11 +242,11 @@ impl<'a> Value<'a> {
         {
             return Err(crate::Error::NonIntegralValue);
         }
+        let this = ManuallyDrop::new(self);
+        let other = ManuallyDrop::new(other);
         let handle =
-            unsafe { barvinok_sys::isl_val_gcd(self.handle.as_ptr(), other.handle.as_ptr()) };
+            unsafe { barvinok_sys::isl_val_gcd(this.handle.as_ptr(), other.handle.as_ptr()) };
         let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(self);
-        std::mem::forget(other);
         Ok(Self {
             handle,
             marker: std::marker::PhantomData,
@@ -258,9 +260,11 @@ impl<'a> Value<'a> {
         }
         let mut x = std::ptr::null_mut();
         let mut y = std::ptr::null_mut();
+        let this = ManuallyDrop::new(self);
+        let other = ManuallyDrop::new(other);
         let handle = unsafe {
             barvinok_sys::isl_val_gcdext(
-                self.handle.as_ptr(),
+                this.handle.as_ptr(),
                 other.handle.as_ptr(),
                 &mut x,
                 &mut y,
@@ -269,8 +273,6 @@ impl<'a> Value<'a> {
         let handle = nonnull_or_alloc_error(handle);
         let x = nonnull_or_alloc_error(x);
         let y = nonnull_or_alloc_error(y);
-        std::mem::forget(self);
-        std::mem::forget(other);
         let gcd = Value {
             handle,
             marker: std::marker::PhantomData,
@@ -350,9 +352,9 @@ impl PartialOrd for Value<'_> {
 impl<'a> std::ops::Neg for Value<'a> {
     type Output = Value<'a>;
     fn neg(self) -> Self::Output {
-        let handle = unsafe { barvinok_sys::isl_val_neg(self.handle.as_ptr()) };
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_val_neg(this.handle.as_ptr()) };
         let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(self);
         Value {
             handle,
             marker: std::marker::PhantomData,
@@ -365,11 +367,11 @@ macro_rules! impl_bin_op {
         impl<'a> std::ops::$trait for Value<'a> {
             type Output = Value<'a>;
             fn $method(self, other: Self) -> Self::Output {
+                let this = ManuallyDrop::new(self);
+                let other = ManuallyDrop::new(other);
                 let handle =
-                    unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other.handle.as_ptr()) };
+                    unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr(), other.handle.as_ptr()) };
                 let handle = nonnull_or_alloc_error(handle);
-                std::mem::forget(self);
-                std::mem::forget(other);
                 Value {
                     handle,
                     marker: std::marker::PhantomData,

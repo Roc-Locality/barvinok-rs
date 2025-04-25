@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{Context, ContextRef, nonnull_or_alloc_error, printer::ISLPrint};
 
@@ -289,8 +289,8 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
     }
 
     pub fn new_singleton(el: T) -> Self {
+        let el = ManuallyDrop::new(el);
         let handle = unsafe { T::list_from_el(T::get_handle(&el)) };
-        std::mem::forget(el);
         let handle = nonnull_or_alloc_error(handle);
         Self {
             handle,
@@ -299,8 +299,8 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
     }
 
     pub fn push(&mut self, el: T) {
+        let el = ManuallyDrop::new(el);
         let handle = unsafe { T::list_add(self.handle.as_ptr(), T::get_handle(&el)) };
-        std::mem::forget(el);
         let handle = nonnull_or_alloc_error(handle);
         self.handle = handle;
     }
@@ -315,9 +315,9 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
     }
 
     pub fn set(&mut self, index: usize, el: T) {
+        let el = ManuallyDrop::new(el);
         let handle =
             unsafe { T::list_set_at(self.handle.as_ptr(), index as i32, T::get_handle(&el)) };
-        std::mem::forget(el);
         let handle = nonnull_or_alloc_error(handle);
         self.handle = handle;
     }

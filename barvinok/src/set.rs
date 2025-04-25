@@ -52,9 +52,9 @@ macro_rules! basic_set_constructor {
                 {
                     return Err(crate::ISLError::Invalid.into());
                 }
+                let space = ManuallyDrop::new(space);
                 let handle = unsafe { barvinok_sys::$isl_fn(space.handle.as_ptr()) };
                 let handle = nonnull_or_alloc_error(handle);
-                std::mem::forget(space);
                 Ok(Self {
                     handle,
                     marker: std::marker::PhantomData,
@@ -68,9 +68,9 @@ macro_rules! basic_set_unary {
     ($fn_name:ident) => {
         paste::paste! {
             pub fn $fn_name(self) -> Result<Self, crate::Error> {
-                let handle = unsafe { barvinok_sys::[<isl_basic_set_ $fn_name>](self.handle.as_ptr()) };
+                let this = ManuallyDrop::new(self);
+                let handle = unsafe { barvinok_sys::[<isl_basic_set_ $fn_name>](this.handle.as_ptr()) };
                 let handle = nonnull_or_alloc_error(handle);
-                std::mem::forget(self);
                 Ok(Self {
                     handle,
                     marker: std::marker::PhantomData,
@@ -84,12 +84,12 @@ macro_rules! basic_set_binary {
     ($fn_name:ident) => {
         paste::paste! {
             pub fn $fn_name(self, other: BasicSet<'a>) -> Result<Self, crate::Error> {
+                let this = ManuallyDrop::new(self);
+                let other = ManuallyDrop::new(other);
                 let handle = unsafe {
-                    barvinok_sys::[<isl_basic_set_ $fn_name>](self.handle.as_ptr(), other.handle.as_ptr())
+                    barvinok_sys::[<isl_basic_set_ $fn_name>](this.handle.as_ptr(), other.handle.as_ptr())
                 };
                 let handle = nonnull_or_alloc_error(handle);
-                std::mem::forget(self);
-                std::mem::forget(other);
                 Ok(Self {
                     handle,
                     marker: std::marker::PhantomData,

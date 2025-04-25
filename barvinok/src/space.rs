@@ -1,4 +1,5 @@
 use std::ffi::CStr;
+use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 
 use barvinok_sys::isl_dim_type;
@@ -62,11 +63,11 @@ impl<'a> Space<'a> {
     space_flag!(is_map, isl_space_is_map);
 
     pub fn add_param_id(&mut self, id: Ident<'a>) {
+        let id = ManuallyDrop::new(id);
         let added = unsafe {
             barvinok_sys::isl_space_add_param_id(self.handle.as_ptr(), id.handle.as_ptr())
         };
         let added = nonnull_or_alloc_error(added);
-        std::mem::forget(id);
         self.handle = added;
     }
     pub fn set_tuple_name(&mut self, dim_type: DimType, name: &str) -> Result<(), crate::Error> {

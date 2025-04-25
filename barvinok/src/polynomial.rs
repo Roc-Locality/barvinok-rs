@@ -2,6 +2,7 @@ use crate::{impl_isl_print, stat::isl_bool_to_optional_bool, value::Value};
 use std::ptr::NonNull;
 
 use crate::{ContextRef, DimType, nonnull_or_alloc_error, space::Space};
+use std::mem::ManuallyDrop;
 
 #[repr(transparent)]
 pub struct QuasiPolynomial<'a> {
@@ -20,10 +21,10 @@ macro_rules! qpolynomial_constructors {
         paste::paste! {
             $(
                 pub fn [<new_ $func _on_domain>](space: Space<'a>) -> QuasiPolynomial<'a> {
+                    let space = ManuallyDrop::new(space);
                     let handle = unsafe {
                         barvinok_sys::[<isl_qpolynomial_ $func _on_domain>](space.handle.as_ptr())
                     };
-                    std::mem::forget(space);
                     let handle = nonnull_or_alloc_error(handle);
                     QuasiPolynomial {
                         handle,
@@ -47,8 +48,8 @@ macro_rules! qpolynomial_flag {
 macro_rules! impl_unary_op_qpolynomial_inline {
     ($vis:vis $method:ident, $isl_fn:ident) => {
         $vis fn $method(self) -> Self {
-            let handle = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr()) };
-            std::mem::forget(self);
+            let this = ManuallyDrop::new(self);
+            let handle = unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr()) };
             let handle = nonnull_or_alloc_error(handle);
             QuasiPolynomial {
                 handle,
@@ -61,11 +62,11 @@ macro_rules! impl_unary_op_qpolynomial_inline {
 macro_rules! impl_bin_op_qpolynomial_inline {
     ($vis:vis $method:ident, $isl_fn:ident, $other:ty) => {
         $vis fn $method(self, other: $other) -> Self {
+            let this = ManuallyDrop::new(self);
+            let other = ManuallyDrop::new(other);
             let handle =
-                unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other.handle.as_ptr()) };
-            std::mem::forget(self);
+                unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr(), other.handle.as_ptr()) };
             let handle = nonnull_or_alloc_error(handle);
-            std::mem::forget(other);
             QuasiPolynomial {
                 handle,
                 marker: std::marker::PhantomData,
@@ -74,9 +75,9 @@ macro_rules! impl_bin_op_qpolynomial_inline {
     };
     (trivial $vis:vis $method:ident, $isl_fn:ident, $other:ty) => {
         $vis fn $method(self, other: $other) -> Self {
+            let this = ManuallyDrop::new(self);
             let handle =
-                unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other) };
-            std::mem::forget(self);
+                unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr(), other) };
             let handle = nonnull_or_alloc_error(handle);
             QuasiPolynomial {
                 handle,
@@ -115,6 +116,8 @@ impl<'a> QuasiPolynomial<'a> {
         unsafe { barvinok_sys::isl_qpolynomial_dim(self.handle.as_ptr(), dim) as usize }
     }
     pub fn new_val_on_domain(space: Space<'a>, value: Value<'a>) -> QuasiPolynomial<'a> {
+        let space = ManuallyDrop::new(space);
+        let value = ManuallyDrop::new(value);
         let handle = unsafe {
             barvinok_sys::isl_qpolynomial_val_on_domain(
                 space.handle.as_ptr(),
@@ -122,8 +125,6 @@ impl<'a> QuasiPolynomial<'a> {
             )
         };
         let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(space);
-        std::mem::forget(value);
         QuasiPolynomial {
             handle,
             marker: std::marker::PhantomData,
@@ -140,11 +141,11 @@ impl<'a> QuasiPolynomial<'a> {
         if pos >= dim_size {
             return Err(crate::Error::VariablePositionOutOfBounds);
         }
+        let space = ManuallyDrop::new(space);
         let handle = unsafe {
             barvinok_sys::isl_qpolynomial_var_on_domain(space.handle.as_ptr(), dim_type as u32, pos)
         };
         let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(space);
         Ok(QuasiPolynomial {
             handle,
             marker: std::marker::PhantomData,
@@ -236,20 +237,20 @@ impl<'a> PiecewiseQuasiPolynomial<'a> {
         isl_bool_to_optional_bool(flag)
     }
     pub fn new_zero(space: Space<'a>) -> PiecewiseQuasiPolynomial<'a> {
+        let space = ManuallyDrop::new(space);
         let handle = unsafe { barvinok_sys::isl_pw_qpolynomial_zero(space.handle.as_ptr()) };
         let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(space);
         PiecewiseQuasiPolynomial {
             handle,
             marker: std::marker::PhantomData,
         }
     }
     pub fn from_qpolynomial(polynomial: QuasiPolynomial<'a>) -> PiecewiseQuasiPolynomial<'a> {
+        let polynomial = ManuallyDrop::new(polynomial);
         let handle = unsafe {
             barvinok_sys::isl_pw_qpolynomial_from_qpolynomial(polynomial.handle.as_ptr())
         };
         let handle = nonnull_or_alloc_error(handle);
-        std::mem::forget(polynomial);
         PiecewiseQuasiPolynomial {
             handle,
             marker: std::marker::PhantomData,
