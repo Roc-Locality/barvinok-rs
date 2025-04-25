@@ -1,21 +1,13 @@
-use std::ptr::NonNull;
 
 use num_traits::PrimInt;
 
 use crate::{
-    Context, ContextRef, impl_isl_print, nonnull_or_alloc_error,
-    stat::{ContextResult, isl_bool_to_optional_bool},
+    impl_isl_handle, nonnull_or_alloc_error, stat::{isl_bool_to_optional_bool, ContextResult}, Context
 };
 
 use std::mem::ManuallyDrop;
 
-#[repr(transparent)]
-pub struct Value<'a> {
-    pub(crate) handle: NonNull<barvinok_sys::isl_val>,
-    pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
-}
-
-impl_isl_print!(Value, isl_val, isl_printer_print_val);
+impl_isl_handle!(Value, val);
 
 macro_rules! isl_val_new {
     ($name:ident, $func:ident $(, $arg_name:ident : $arg_ty:ty)*) => {
@@ -107,16 +99,6 @@ impl<'a> Value<'a> {
             handle,
             marker: std::marker::PhantomData,
         }
-    }
-
-    pub fn context_ref(&self) -> ContextRef<'a> {
-        let ctx = unsafe { barvinok_sys::isl_val_get_ctx(self.handle.as_ptr()) };
-        let ctx = unsafe { NonNull::new_unchecked(ctx) };
-        ContextRef(ctx, std::marker::PhantomData)
-    }
-
-    pub fn dump(&self) {
-        unsafe { barvinok_sys::isl_val_dump(self.handle.as_ptr()) }
     }
 
     pub fn numerator(&self) -> i64 {
@@ -286,23 +268,6 @@ impl<'a> Value<'a> {
             marker: std::marker::PhantomData,
         };
         Ok((gcd, x, y))
-    }
-}
-
-impl Drop for Value<'_> {
-    fn drop(&mut self) {
-        unsafe { barvinok_sys::isl_val_free(self.handle.as_ptr()) };
-    }
-}
-
-impl Clone for Value<'_> {
-    fn clone(&self) -> Self {
-        let handle = unsafe { barvinok_sys::isl_val_copy(self.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
     }
 }
 

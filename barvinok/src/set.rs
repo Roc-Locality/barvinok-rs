@@ -1,47 +1,11 @@
 use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{
-    DimType, impl_isl_print, nonnull_or_alloc_error,
-    polynomial::PiecewiseQuasiPolynomial,
-    space::Space,
-    stat::{ContextResult, isl_size_to_optional_u32},
+    impl_isl_handle, nonnull_or_alloc_error, polynomial::PiecewiseQuasiPolynomial, space::Space, stat::{isl_size_to_optional_u32, ContextResult}, DimType
 };
 
-#[repr(transparent)]
-pub struct BasicSet<'a> {
-    pub(crate) handle: NonNull<barvinok_sys::isl_basic_set>,
-    pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
-}
-
-#[repr(transparent)]
-pub struct Set<'a> {
-    pub(crate) handle: NonNull<barvinok_sys::isl_set>,
-    pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
-}
-
-impl<'a> Set<'a> {
-    pub fn context_ref(&self) -> crate::ContextRef<'a> {
-        let handle = unsafe { barvinok_sys::isl_set_get_ctx(self.handle.as_ptr()) };
-        let handle = unsafe { NonNull::new_unchecked(handle) };
-        crate::ContextRef(handle, std::marker::PhantomData)
-    }
-}
-
-impl Drop for Set<'_> {
-    fn drop(&mut self) {
-        unsafe { barvinok_sys::isl_set_free(self.handle.as_ptr()) };
-    }
-}
-impl Clone for Set<'_> {
-    fn clone(&self) -> Self {
-        let handle = unsafe { barvinok_sys::isl_set_copy(self.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-}
+impl_isl_handle!(Set, set);
+impl_isl_handle!(BasicSet, basic_set);
 
 macro_rules! basic_set_constructor {
     ($fn_name:ident, $isl_fn:ident) => {
@@ -100,11 +64,6 @@ macro_rules! basic_set_binary {
 }
 
 impl<'a> BasicSet<'a> {
-    pub fn context_ref(&self) -> crate::ContextRef<'a> {
-        let handle = unsafe { barvinok_sys::isl_basic_set_get_ctx(self.handle.as_ptr()) };
-        let handle = unsafe { NonNull::new_unchecked(handle) };
-        crate::ContextRef(handle, std::marker::PhantomData)
-    }
     basic_set_constructor!(universe, isl_basic_set_universe);
     basic_set_constructor!(empty, isl_basic_set_empty);
     basic_set_constructor!(nat_universe, isl_basic_set_nat_universe);
@@ -140,26 +99,6 @@ impl<'a> BasicSet<'a> {
         })
     }
 }
-
-impl Drop for BasicSet<'_> {
-    fn drop(&mut self) {
-        unsafe { barvinok_sys::isl_basic_set_free(self.handle.as_ptr()) };
-    }
-}
-
-impl Clone for BasicSet<'_> {
-    fn clone(&self) -> Self {
-        let handle = unsafe { barvinok_sys::isl_basic_set_copy(self.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl_isl_print!(Set, isl_set, isl_printer_print_set);
-impl_isl_print!(BasicSet, isl_basic_set, isl_printer_print_basic_set);
 
 #[cfg(test)]
 mod test {

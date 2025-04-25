@@ -1,22 +1,15 @@
 use std::ffi::CStr;
 use std::mem::ManuallyDrop;
-use std::ptr::NonNull;
 
 use barvinok_sys::isl_dim_type;
 
 use crate::stat::isl_size_to_optional_u32;
 use crate::{
-    Context, ContextRef, ident::Ident, nonnull_or_alloc_error, stat::isl_bool_to_optional_bool,
+    Context, ident::Ident, nonnull_or_alloc_error, stat::isl_bool_to_optional_bool,
 };
-use crate::{DimType, impl_isl_print};
+use crate::{impl_isl_handle, DimType};
 
-#[repr(transparent)]
-pub struct Space<'a> {
-    pub(crate) handle: NonNull<barvinok_sys::isl_space>,
-    pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
-}
-
-impl_isl_print!(Space, isl_space, isl_printer_print_space);
+impl_isl_handle!(Space, space);
 
 macro_rules! space_constructor {
     // Pattern with additional arguments
@@ -48,16 +41,6 @@ impl<'a> Space<'a> {
     space_constructor!(new_set,    isl_space_set_alloc,    num_params: u32, num_dims: u32);
     space_constructor!(new_params, isl_space_params_alloc, num_params: u32);
     space_constructor!(new_unit, isl_space_unit);
-
-    pub fn context_ref(&self) -> ContextRef<'a> {
-        ContextRef(
-            unsafe {
-                NonNull::new_unchecked(barvinok_sys::isl_space_get_ctx(self.handle.as_ptr()))
-            },
-            std::marker::PhantomData,
-        )
-    }
-
     space_flag!(is_params, isl_space_is_params);
     space_flag!(is_set, isl_space_is_set);
     space_flag!(is_map, isl_space_is_map);
@@ -109,23 +92,6 @@ impl<'a> Space<'a> {
         let dim =
             unsafe { barvinok_sys::isl_space_dim(self.handle.as_ptr(), dim_type as isl_dim_type) };
         isl_size_to_optional_u32(dim)
-    }
-}
-
-impl Drop for Space<'_> {
-    fn drop(&mut self) {
-        unsafe { barvinok_sys::isl_space_free(self.handle.as_ptr()) };
-    }
-}
-
-impl Clone for Space<'_> {
-    fn clone(&self) -> Self {
-        let handle = unsafe { barvinok_sys::isl_space_copy(self.handle.as_ptr()) };
-        let handle = unsafe { NonNull::new_unchecked(handle) };
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
     }
 }
 

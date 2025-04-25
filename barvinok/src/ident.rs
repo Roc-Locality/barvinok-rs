@@ -1,13 +1,7 @@
-use crate::printer::ISLPrint;
-use crate::{Context, ContextRef, nonnull_or_alloc_error};
-use std::fmt::Debug;
+use crate::{impl_isl_handle, nonnull_or_alloc_error, Context};
 use std::{any::Any, ptr::NonNull};
 
-#[repr(transparent)]
-pub struct Ident<'a> {
-    pub(crate) handle: NonNull<barvinok_sys::isl_id>,
-    pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
-}
+impl_isl_handle!(Ident, id);
 
 type CastFn = fn(NonNull<std::ffi::c_void>) -> NonNull<dyn Any>;
 
@@ -89,60 +83,6 @@ impl<'a> Ident<'a> {
         let cstr = unsafe { barvinok_sys::isl_id_get_name(self.handle.as_ptr()) };
         let cstr = unsafe { std::ffi::CStr::from_ptr(cstr) };
         Ok(cstr.to_str()?)
-    }
-
-    pub fn context_ref(&self) -> ContextRef<'a> {
-        let ctx = unsafe { barvinok_sys::isl_id_get_ctx(self.handle.as_ptr()) };
-        let ctx = unsafe { NonNull::new_unchecked(ctx) };
-        ContextRef(ctx, std::marker::PhantomData)
-    }
-    pub fn dump(&self) {
-        unsafe {
-            barvinok_sys::isl_id_dump(self.handle.as_ptr());
-        }
-    }
-}
-
-impl Clone for Ident<'_> {
-    fn clone(&self) -> Self {
-        let handle = unsafe { barvinok_sys::isl_id_copy(self.handle.as_ptr()) };
-        let handle = unsafe { NonNull::new_unchecked(handle) };
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl Drop for Ident<'_> {
-    fn drop(&mut self) {
-        unsafe { barvinok_sys::isl_id_free(self.handle.as_ptr()) };
-    }
-}
-
-impl<'a> ISLPrint<'a> for Ident<'a> {
-    type Handle = barvinok_sys::isl_id;
-
-    fn context(&self) -> ContextRef<'a> {
-        self.context_ref()
-    }
-
-    fn handle(&self) -> *mut Self::Handle {
-        self.handle.as_ptr()
-    }
-
-    unsafe fn isl_printer_print(
-        printer: *mut barvinok_sys::isl_printer,
-        handle: *mut Self::Handle,
-    ) -> *mut barvinok_sys::isl_printer {
-        unsafe { barvinok_sys::isl_printer_print_id(printer, handle) }
-    }
-}
-
-impl Debug for Ident<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let wrapper = crate::printer::FmtWrapper::new(self);
-        Debug::fmt(&wrapper, f)
     }
 }
 
