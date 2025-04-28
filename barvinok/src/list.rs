@@ -409,6 +409,11 @@ impl<'a, 'b, T: ListRawAPI + 'b> Iterator for Iter<'a, 'b, T> {
             None
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.list.len() - self.index;
+        (remaining, Some(remaining))
+    }
 }
 
 impl<'a, 'b, T: ListRawAPI + 'b> ExactSizeIterator for Iter<'a, 'b, T> {
