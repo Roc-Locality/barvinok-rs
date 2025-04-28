@@ -2,8 +2,11 @@ use std::{marker::PhantomData, ptr::NonNull};
 
 use barvinok_sys::isl_options_set_on_error;
 
+pub mod aff;
+pub mod constraint;
 pub mod ident;
 pub mod list;
+pub mod local_space;
 pub mod map;
 pub mod mat;
 pub mod polynomial;
