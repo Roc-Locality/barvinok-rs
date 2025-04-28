@@ -104,12 +104,9 @@ impl<'a> LocalSpace<'a> {
         let id = unsafe {
             barvinok_sys::isl_local_space_get_dim_id(self.handle.as_ptr(), dim as isl_dim_type, pos)
         };
-        NonNull::new(id).map(|id| {
-            
-            Ident {
-                handle: id,
-                marker: std::marker::PhantomData,
-            }
+        NonNull::new(id).map(|id| Ident {
+            handle: id,
+            marker: std::marker::PhantomData,
         })
     }
     pub fn set_dim_id(&mut self, dim: DimType, pos: u32, id: Ident<'a>) {
@@ -135,12 +132,9 @@ impl<'a> LocalSpace<'a> {
     }
     pub fn get_div(&self, pos: u32) -> Option<Affine<'a>> {
         let id = unsafe { barvinok_sys::isl_local_space_get_div(self.handle.as_ptr(), pos as i32) };
-        NonNull::new(id).map(|id| {
-            
-            Affine {
-                handle: id,
-                marker: std::marker::PhantomData,
-            }
+        NonNull::new(id).map(|id| Affine {
+            handle: id,
+            marker: std::marker::PhantomData,
         })
     }
     pub fn find_dim_by_name(&self, dim: DimType, name: &str) -> Option<u32> {
@@ -318,7 +312,10 @@ mod tests {
         local_space.set_dim_name(DimType::Out, 0, "y").unwrap();
         println!("{:?}", local_space);
         assert!(local_space.get_dim_id(DimType::In, 0).is_none());
-        assert_eq!(local_space.get_dim_name(DimType::Out, 0).unwrap(), Some("y"));
+        assert!(local_space.get_dim_id(DimType::Out, 0).is_some());
+        assert_eq!(
+            local_space.get_dim_name(DimType::Out, 0).unwrap(),
+            Some("y")
+        );
     }
-
 }
