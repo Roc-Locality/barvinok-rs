@@ -1,7 +1,9 @@
 use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{
-    DimType, impl_isl_handle,
+    DimType,
+    aff::Affine,
+    impl_isl_handle,
     local_space::LocalSpace,
     nonnull_or_alloc_error,
     space::Space,
@@ -181,11 +183,111 @@ impl<'a> Constraint<'a> {
             })
             .ok_or_else(|| ctx.as_ref().last_error_or_unknown().into())
     }
+    pub fn get_div(&self, pos: u32) -> Option<Affine<'a>> {
+        let handle =
+            unsafe { barvinok_sys::isl_constraint_get_div(self.handle.as_ptr(), pos as i32) };
+        NonNull::new(handle).map(|handle| Affine {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    pub fn negate(self) -> Self {
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_constraint_negate(this.handle.as_ptr()) };
+        let handle = nonnull_or_alloc_error(handle);
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+    pub fn is_equality(&self) -> Option<bool> {
+        let result = unsafe { barvinok_sys::isl_constraint_is_equality(self.handle.as_ptr()) };
+        isl_bool_to_optional_bool(result)
+    }
+    pub fn is_div_constraint(&self) -> Option<bool> {
+        let result =
+            unsafe { barvinok_sys::isl_constraint_is_div_constraint(self.handle.as_ptr()) };
+        isl_bool_to_optional_bool(result)
+    }
+    pub fn is_lower_bound(&self, dim_type: DimType, pos: u32) -> Option<bool> {
+        let result = unsafe {
+            barvinok_sys::isl_constraint_is_lower_bound(
+                self.handle.as_ptr(),
+                dim_type as barvinok_sys::isl_dim_type,
+                pos,
+            )
+        };
+        isl_bool_to_optional_bool(result)
+    }
+    pub fn is_upper_bound(&self, dim_type: DimType, pos: u32) -> Option<bool> {
+        let result = unsafe {
+            barvinok_sys::isl_constraint_is_upper_bound(
+                self.handle.as_ptr(),
+                dim_type as barvinok_sys::isl_dim_type,
+                pos,
+            )
+        };
+        isl_bool_to_optional_bool(result)
+    }
+    pub fn get_bound_type(&self, dim_type: DimType, pos: u32) -> Option<Affine<'a>> {
+        let handle = unsafe {
+            barvinok_sys::isl_constraint_get_bound(
+                self.handle.as_ptr(),
+                dim_type as barvinok_sys::isl_dim_type,
+                pos as i32,
+            )
+        };
+        NonNull::new(handle).map(|handle| Affine {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    pub fn get_affine(&self) -> Option<Affine<'a>> {
+        let handle = unsafe { barvinok_sys::isl_constraint_get_aff(self.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Affine {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    pub fn new_inequality_from_affine(affine: Affine<'a>) -> Self {
+        let affine = ManuallyDrop::new(affine);
+        let handle = unsafe { barvinok_sys::isl_inequality_from_aff(affine.handle.as_ptr()) };
+        let handle = nonnull_or_alloc_error(handle);
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+    pub fn new_equality_from_affine(affine: Affine<'a>) -> Self {
+        let affine = ManuallyDrop::new(affine);
+        let handle = unsafe { barvinok_sys::isl_equality_from_aff(affine.handle.as_ptr()) };
+        let handle = nonnull_or_alloc_error(handle);
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+    pub fn plain_cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let res = unsafe {
+            barvinok_sys::isl_constraint_plain_cmp(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        res.cmp(&0)
+    }
+    pub fn cmp_last_nonzero(&self, other: &Self) -> std::cmp::Ordering {
+        let res = unsafe {
+            barvinok_sys::isl_constraint_cmp_last_non_zero(
+                self.handle.as_ptr(),
+                other.handle.as_ptr(),
+            )
+        };
+        res.cmp(&0)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::Context;
+    use crate::set::BasicSet;
 
     use super::*;
     use crate::local_space::LocalSpace;
@@ -230,5 +332,41 @@ mod tests {
         constraint = constraint.set_constant_si(5).unwrap();
         constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
         println!("Updated Constraint: {:?}", constraint);
+    }
+
+    #[test]
+    fn test_negate() {
+        let context = Context::new();
+        let space = Space::new(&context, 1, 2, 2);
+        let local_space = LocalSpace::from(space);
+        let mut constraint = Constraint::new_inequality(local_space);
+        constraint = constraint.set_constant_si(42).unwrap();
+        constraint = constraint.set_coefficient_si(DimType::Param, 0, 7).unwrap();
+        let negated_constraint = constraint.negate();
+        println!("Negated Constraint: {:?}", negated_constraint);
+    }
+
+    #[test]
+    fn test_get_affine() {
+        let context = Context::new();
+        let space = Space::new_set(&context, 1, 3);
+        let local_space = LocalSpace::from(space);
+        let mut constraint = Constraint::new_inequality(local_space);
+        constraint = constraint.set_constant_si(5).unwrap();
+        constraint = constraint.set_coefficient_si(DimType::Out, 0, 3).unwrap();
+        let affine = constraint.get_affine().unwrap();
+        println!("Affine: {:?}", affine);
+    }
+
+    #[test]
+    fn test_into_basic_set() {
+        let context = Context::new();
+        let space = Space::new_set(&context, 1, 3);
+        let local_space = LocalSpace::from(space);
+        let mut constraint = Constraint::new_inequality(local_space);
+        constraint = constraint.set_constant_si(5).unwrap();
+        constraint = constraint.set_coefficient_si(DimType::Out, 0, 3).unwrap();
+        let basic_set = BasicSet::from(constraint);
+        println!("Basic Set: {:?}", basic_set);
     }
 }

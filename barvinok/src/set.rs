@@ -1,7 +1,9 @@
 use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{
-    DimType, impl_isl_handle, nonnull_or_alloc_error,
+    DimType,
+    constraint::Constraint,
+    impl_isl_handle, nonnull_or_alloc_error,
     polynomial::PiecewiseQuasiPolynomial,
     space::Space,
     stat::{ContextResult, isl_size_to_optional_u32},
@@ -101,12 +103,39 @@ impl<'a> BasicSet<'a> {
             marker: std::marker::PhantomData,
         })
     }
+    pub fn add_constraint(self, constraint: Constraint<'a>) -> Option<Self> {
+        let this = ManuallyDrop::new(self);
+        let constraint = ManuallyDrop::new(constraint);
+        let handle = unsafe {
+            barvinok_sys::isl_basic_set_add_constraint(
+                this.handle.as_ptr(),
+                constraint.handle.as_ptr(),
+            )
+        };
+        NonNull::new(handle).map(|handle| BasicSet {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+}
+
+impl<'a> From<Constraint<'a>> for BasicSet<'a> {
+    fn from(constraint: Constraint<'a>) -> Self {
+        let constraint = ManuallyDrop::new(constraint);
+        let handle =
+            unsafe { barvinok_sys::isl_basic_set_from_constraint(constraint.handle.as_ptr()) };
+        let handle = nonnull_or_alloc_error(handle);
+        BasicSet {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::Context;
+    use crate::{Context, local_space::LocalSpace};
 
     #[test]
     fn test_basic_set_creation() {
@@ -143,9 +172,34 @@ mod test {
     #[test]
     fn test_basic_set_cardinality() {
         let ctx = Context::new();
-        let space = Space::new(&ctx, 0, 0, 3);
+        let space = Space::new_set(&ctx, 1, 4);
         let basic_set = BasicSet::new_universe(space.clone()).unwrap();
-        let card = basic_set.cardinality();
+        let card = basic_set.cardinality().unwrap();
+        println!("{:?}", card);
+    }
+    #[test]
+    fn test_interval_product_space() {
+        let ctx = Context::new();
+        let space = Space::new_set(&ctx, 3, 3);
+        let local_space = LocalSpace::from(space.clone());
+        let mut set = BasicSet::new_universe(space.clone()).unwrap();
+        for i in 0..3 {
+            {
+                let mut i_ge_0 = Constraint::new_inequality(local_space.clone());
+                i_ge_0 = i_ge_0.set_coefficient_si(DimType::Out, i, 1).unwrap();
+                set = set.add_constraint(i_ge_0).unwrap();
+                println!("{:?}", set);
+            }
+            {
+                let mut i_lt_p = Constraint::new_inequality(local_space.clone());
+                i_lt_p = i_lt_p.set_coefficient_si(DimType::Param, i, 1).unwrap();
+                i_lt_p = i_lt_p.set_coefficient_si(DimType::Out, i, -1).unwrap();
+                i_lt_p = i_lt_p.set_constant_si(-1).unwrap();
+                set = set.add_constraint(i_lt_p).unwrap();
+                println!("{:?}", set);
+            }
+        }
+        let card = set.cardinality().unwrap();
         println!("{:?}", card);
     }
 }
