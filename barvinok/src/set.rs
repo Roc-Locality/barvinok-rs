@@ -3,7 +3,9 @@ use std::{mem::ManuallyDrop, ptr::NonNull};
 use crate::{
     DimType,
     constraint::Constraint,
-    impl_isl_handle, nonnull_or_alloc_error,
+    impl_isl_handle,
+    list::List,
+    nonnull_or_alloc_error,
     polynomial::PiecewiseQuasiPolynomial,
     space::Space,
     stat::{ContextResult, isl_size_to_optional_u32},
@@ -117,6 +119,14 @@ impl<'a> BasicSet<'a> {
             marker: std::marker::PhantomData,
         })
     }
+    pub fn get_constraints(&self) -> Option<List<Constraint<'a>>> {
+        let handle =
+            unsafe { barvinok_sys::isl_basic_set_get_constraint_list(self.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| List {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
 }
 
 impl<'a> From<Constraint<'a>> for BasicSet<'a> {
@@ -199,7 +209,12 @@ mod test {
                 println!("{:?}", set);
             }
         }
-        let card = set.cardinality().unwrap();
+        let card = set.clone().cardinality().unwrap();
         println!("{:?}", card);
+        println!("constraints:");
+        let list = set.get_constraints().unwrap();
+        for i in list.iter() {
+            println!("{:?}", i);
+        }
     }
 }

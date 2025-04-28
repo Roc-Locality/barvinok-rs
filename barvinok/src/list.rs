@@ -258,9 +258,25 @@ impl_list_raw_api!(
     }
 );
 
+impl_list_raw_api!(
+    crate::constraint::Constraint<'_>,
+    handle = barvinok_sys::isl_constraint,
+    list_handle = barvinok_sys::isl_constraint_list,
+    prefix = constraint,
+    unsafe fn get_handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr()
+    },
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+);
+
 pub struct List<'a, T: ListRawAPI> {
-    handle: NonNull<T::ListHandle>,
-    marker: std::marker::PhantomData<*mut &'a [&'a T]>,
+    pub(crate) handle: NonNull<T::ListHandle>,
+    pub(crate) marker: std::marker::PhantomData<*mut &'a [&'a T]>,
 }
 
 impl<'a, T: ListRawAPI + 'a> List<'a, T> {
@@ -321,6 +337,10 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
         let handle = nonnull_or_alloc_error(handle);
         self.handle = handle;
     }
+
+    pub fn iter<'u>(&'u self) -> Iter<'u, 'a, T> {
+        Iter::new(self)
+    }
 }
 
 impl<'a, T: ListRawAPI + 'a> Drop for List<'a, T> {
@@ -363,6 +383,48 @@ impl<'a, T: ListRawAPI + 'a> std::fmt::Debug for List<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let wrapper = crate::printer::FmtWrapper::new(self);
         std::fmt::Debug::fmt(&wrapper, f)
+    }
+}
+
+pub struct Iter<'a, 'b, T: ListRawAPI + 'a> {
+    list: &'a List<'b, T>,
+    index: usize,
+}
+
+impl<'a, 'b, T: ListRawAPI + 'b> Iter<'a, 'b, T> {
+    pub fn new(list: &'a List<'b, T>) -> Self {
+        Self { list, index: 0 }
+    }
+}
+
+impl<'a, 'b, T: ListRawAPI + 'b> Iterator for Iter<'a, 'b, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.list.len() {
+            let el = self.list.get(self.index);
+            self.index += 1;
+            el
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, 'b, T: ListRawAPI + 'b> ExactSizeIterator for Iter<'a, 'b, T> {
+    fn len(&self) -> usize {
+        self.list.len() - self.index
+    }
+}
+
+impl<'a, 'b, T: ListRawAPI + 'b> DoubleEndedIterator for Iter<'a, 'b, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.index > 0 {
+            self.index -= 1;
+            self.list.get(self.index)
+        } else {
+            None
+        }
     }
 }
 
