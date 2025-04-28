@@ -171,11 +171,10 @@ macro_rules! impl_isl_handle {
                 }
             }
 
-            $crate::impl_isl_print!($RustType, [< isl_ $cname >], [< isl_printer_print_ $cname >]);
+            $crate::impl_isl_print!($RustType, [<isl_ $cname>], [< isl_printer_print_ $cname>]);
         }
     };
     ([noprint] $RustType:ident, $cname:ident) => {
-
         paste::paste! {
             #[repr(transparent)]
             pub struct $RustType<'a> {
