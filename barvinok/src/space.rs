@@ -4,10 +4,8 @@ use std::mem::ManuallyDrop;
 use barvinok_sys::isl_dim_type;
 
 use crate::stat::isl_size_to_optional_u32;
-use crate::{
-    Context, ident::Ident, nonnull_or_alloc_error, stat::isl_bool_to_optional_bool,
-};
-use crate::{impl_isl_handle, DimType};
+use crate::{Context, ident::Ident, nonnull_or_alloc_error, stat::isl_bool_to_optional_bool};
+use crate::{DimType, impl_isl_handle};
 
 impl_isl_handle!(Space, space);
 

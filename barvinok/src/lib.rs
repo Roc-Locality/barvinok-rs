@@ -5,13 +5,13 @@ use barvinok_sys::isl_options_set_on_error;
 pub mod ident;
 pub mod list;
 pub mod map;
+pub mod mat;
 pub mod polynomial;
 mod printer;
 pub mod set;
 pub mod space;
 pub mod value;
 pub mod vec;
-pub mod mat;
 
 mod stat;
 
@@ -136,7 +136,7 @@ pub enum DimType {
 
 macro_rules! impl_isl_handle {
     ($RustType:ident, $cname:ident) => {
-        
+
         paste::paste! {
             #[repr(transparent)]
             pub struct $RustType<'a> {
@@ -172,6 +172,40 @@ macro_rules! impl_isl_handle {
             }
 
             $crate::impl_isl_print!($RustType, [< isl_ $cname >], [< isl_printer_print_ $cname >]);
+        }
+    };
+    ([noprint] $RustType:ident, $cname:ident) => {
+
+        paste::paste! {
+            #[repr(transparent)]
+            pub struct $RustType<'a> {
+                pub(crate) handle: std::ptr::NonNull<barvinok_sys::[<isl_ $cname>]>,
+                pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
+            }
+            impl Clone for $RustType<'_> {
+                fn clone(&self) -> Self {
+                    let handle = unsafe { barvinok_sys::[< isl_ $cname _copy>](self.handle.as_ptr()) };
+                    let handle = $crate::nonnull_or_alloc_error(handle);
+                    Self {
+                        handle,
+                        marker: std::marker::PhantomData,
+                    }
+                }
+            }
+
+            impl Drop for $RustType<'_> {
+                fn drop(&mut self) {
+                    unsafe { barvinok_sys::[< isl_ $cname _free>](self.handle.as_ptr()) };
+                }
+            }
+
+            impl<'a> $RustType<'a> {
+                pub fn context_ref(&self) -> $crate::ContextRef<'a> {
+                    let ctx = unsafe { barvinok_sys::[< isl_ $cname _get_ctx>](self.handle.as_ptr()) };
+                    let ptr = unsafe { std::ptr::NonNull::new_unchecked(ctx) };
+                    $crate::ContextRef(ptr, std::marker::PhantomData)
+                }
+            }
         }
     };
 }

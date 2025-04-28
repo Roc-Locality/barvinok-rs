@@ -1,10 +1,15 @@
-use crate::{impl_isl_handle, stat::isl_bool_to_optional_bool, value::Value};
-use std::ptr::NonNull;
+use crate::{
+    impl_isl_handle,
+    stat::{isl_bool_to_optional_bool, isl_size_to_optional_u32},
+    value::Value,
+};
+use std::{cell::Cell, ptr::NonNull};
 
 use crate::{DimType, nonnull_or_alloc_error, space::Space};
 use std::mem::ManuallyDrop;
 
 impl_isl_handle!(QuasiPolynomial, qpolynomial);
+impl_isl_handle!([noprint] Term, term);
 impl_isl_handle!(PiecewiseQuasiPolynomial, pw_qpolynomial);
 
 macro_rules! qpolynomial_constructors {
@@ -163,6 +168,55 @@ impl<'a> QuasiPolynomial<'a> {
         };
         isl_bool_to_optional_bool(flag)
     }
+    pub fn foreach_term<F>(&self, func: F) -> Result<(), crate::Error>
+    where
+        F: FnMut(Term<'a>) -> Result<(), crate::Error>,
+    {
+        struct FuncWithState<F> {
+            func: F,
+            state: Cell<Result<(), crate::Error>>,
+        }
+        let mut func = FuncWithState {
+            func,
+            state: Cell::new(Ok(())),
+        };
+        unsafe extern "C" fn callback<'a, F>(
+            term: *mut barvinok_sys::isl_term,
+            user: *mut std::ffi::c_void,
+        ) -> barvinok_sys::isl_stat
+        where
+            F: FnMut(Term<'a>) -> Result<(), crate::Error>,
+        {
+            let data = unsafe { &mut *(user as *mut FuncWithState<F>) };
+            let term = Term {
+                handle: NonNull::new(term).unwrap(),
+                marker: std::marker::PhantomData,
+            };
+            let state = data.state.replace(Ok(()));
+            data.state.set(state.and_then(|_| (data.func)(term)));
+            if data.state.get_mut().is_ok() {
+                barvinok_sys::isl_stat_isl_stat_ok
+            } else {
+                barvinok_sys::isl_stat_isl_stat_error
+            }
+        }
+        let handle = self.handle.as_ptr();
+        let res = unsafe {
+            barvinok_sys::isl_qpolynomial_foreach_term(
+                handle,
+                Some(callback::<F>),
+                &mut func as *mut FuncWithState<F> as *mut std::ffi::c_void,
+            )
+        };
+        if res == barvinok_sys::isl_stat_isl_stat_ok {
+            func.state.into_inner()
+        } else {
+            match func.state.into_inner() {
+                Ok(()) => Err(self.context_ref().as_ref().last_error_or_unknown().into()),
+                Err(e) => Err(e),
+            }
+        }
+    }
 }
 
 macro_rules! impl_bin_op_qpolynomial {
@@ -219,6 +273,26 @@ impl<'a> PiecewiseQuasiPolynomial<'a> {
             handle,
             marker: std::marker::PhantomData,
         }
+    }
+}
+
+impl<'a> Term<'a> {
+    pub fn dim(&self, dim: DimType) -> Option<u32> {
+        let dim = dim as barvinok_sys::isl_dim_type;
+        isl_size_to_optional_u32(unsafe { barvinok_sys::isl_term_dim(self.handle.as_ptr(), dim) })
+    }
+    pub fn exponent(&self, dim: DimType, pos: u32) -> Option<u32> {
+        let dim = dim as barvinok_sys::isl_dim_type;
+        isl_size_to_optional_u32(unsafe {
+            barvinok_sys::isl_term_get_exp(self.handle.as_ptr(), dim, pos)
+        })
+    }
+    pub fn coefficient(&self) -> Option<Value<'a>> {
+        let handle = unsafe { barvinok_sys::isl_term_get_coefficient_val(self.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Value {
+            handle,
+            marker: std::marker::PhantomData,
+        })
     }
 }
 
@@ -332,5 +406,24 @@ mod tests {
         let pw_qpoly = PiecewiseQuasiPolynomial::from_qpolynomial(qpoly);
         assert_eq!(pw_qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
         println!("{:?}", pw_qpoly);
+    }
+
+    #[test]
+    fn test_qpoly_foreach_term() {
+        let ctx = Context::new();
+        let space = Space::new_set(&ctx, 1, 2);
+        let qpoly = QuasiPolynomial::new_one_on_domain(space);
+        qpoly
+            .foreach_term(|term| {
+                println!("term dim(in): {:?}", term.dim(DimType::In));
+                println!("term dim(out): {:?}", term.dim(DimType::Out));
+                println!("term dim(param): {:?}", term.dim(DimType::Param));
+                println!("term exp(in): {:?}", term.exponent(DimType::In, 0));
+                println!("term exp(out): {:?}", term.exponent(DimType::Out, 0));
+                println!("term exp(param): {:?}", term.exponent(DimType::Param, 0));
+                println!("term coefficient: {:?}", term.coefficient());
+                Ok(())
+            })
+            .unwrap();
     }
 }

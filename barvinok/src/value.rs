@@ -1,8 +1,8 @@
-
 use num_traits::PrimInt;
 
 use crate::{
-    impl_isl_handle, nonnull_or_alloc_error, stat::{isl_bool_to_optional_bool, ContextResult}, Context
+    Context, impl_isl_handle, nonnull_or_alloc_error,
+    stat::{ContextResult, isl_bool_to_optional_bool},
 };
 
 use std::mem::ManuallyDrop;

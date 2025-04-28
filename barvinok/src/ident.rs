@@ -1,4 +1,4 @@
-use crate::{impl_isl_handle, nonnull_or_alloc_error, Context};
+use crate::{Context, impl_isl_handle, nonnull_or_alloc_error};
 use std::{any::Any, ptr::NonNull};
 
 impl_isl_handle!(Ident, id);

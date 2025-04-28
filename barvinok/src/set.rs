@@ -1,7 +1,10 @@
 use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{
-    impl_isl_handle, nonnull_or_alloc_error, polynomial::PiecewiseQuasiPolynomial, space::Space, stat::{isl_size_to_optional_u32, ContextResult}, DimType
+    DimType, impl_isl_handle, nonnull_or_alloc_error,
+    polynomial::PiecewiseQuasiPolynomial,
+    space::Space,
+    stat::{ContextResult, isl_size_to_optional_u32},
 };
 
 impl_isl_handle!(Set, set);
