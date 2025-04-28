@@ -1,20 +1,11 @@
-use crate::{impl_isl_print, stat::isl_bool_to_optional_bool, value::Value};
+use crate::{impl_isl_handle, stat::isl_bool_to_optional_bool, value::Value};
 use std::ptr::NonNull;
 
-use crate::{ContextRef, DimType, nonnull_or_alloc_error, space::Space};
+use crate::{DimType, nonnull_or_alloc_error, space::Space};
 use std::mem::ManuallyDrop;
 
-#[repr(transparent)]
-pub struct QuasiPolynomial<'a> {
-    handle: NonNull<barvinok_sys::isl_qpolynomial>,
-    marker: std::marker::PhantomData<&'a ()>,
-}
-
-#[repr(transparent)]
-pub struct PiecewiseQuasiPolynomial<'a> {
-    pub(crate) handle: NonNull<barvinok_sys::isl_pw_qpolynomial>,
-    pub(crate) marker: std::marker::PhantomData<&'a ()>,
-}
+impl_isl_handle!(QuasiPolynomial, qpolynomial);
+impl_isl_handle!(PiecewiseQuasiPolynomial, pw_qpolynomial);
 
 macro_rules! qpolynomial_constructors {
     ($($func:ident),+ $(,)?) => {
@@ -89,11 +80,6 @@ macro_rules! impl_bin_op_qpolynomial_inline {
 
 impl<'a> QuasiPolynomial<'a> {
     qpolynomial_constructors!(zero, one, infty, neginfty, nan);
-    pub fn context_ref(&self) -> ContextRef<'a> {
-        let ctx = unsafe { barvinok_sys::isl_qpolynomial_get_ctx(self.handle.as_ptr()) };
-        let ctx = unsafe { NonNull::new_unchecked(ctx) };
-        ContextRef(ctx, std::marker::PhantomData)
-    }
     pub fn get_domain_space(&self) -> Space<'a> {
         let handle =
             unsafe { barvinok_sys::isl_qpolynomial_get_domain_space(self.handle.as_ptr()) };
@@ -179,23 +165,6 @@ impl<'a> QuasiPolynomial<'a> {
     }
 }
 
-impl Clone for QuasiPolynomial<'_> {
-    fn clone(&self) -> Self {
-        let handle = unsafe { barvinok_sys::isl_qpolynomial_copy(self.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl Drop for QuasiPolynomial<'_> {
-    fn drop(&mut self) {
-        unsafe { barvinok_sys::isl_qpolynomial_free(self.handle.as_ptr()) };
-    }
-}
-
 macro_rules! impl_bin_op_qpolynomial {
     ($trait:ident, $method:ident, $isl_fn:ident) => {
         impl<'a> std::ops::$trait for QuasiPolynomial<'a> {
@@ -210,11 +179,6 @@ impl_bin_op_qpolynomial!(Sub, sub, isl_qpolynomial_sub);
 impl_bin_op_qpolynomial!(Mul, mul, isl_qpolynomial_mul);
 
 impl<'a> PiecewiseQuasiPolynomial<'a> {
-    pub fn context_ref(&self) -> ContextRef<'a> {
-        let ctx = unsafe { barvinok_sys::isl_pw_qpolynomial_get_ctx(self.handle.as_ptr()) };
-        let ctx = unsafe { NonNull::new_unchecked(ctx) };
-        ContextRef(ctx, std::marker::PhantomData)
-    }
     pub fn get_space(&self) -> Space<'a> {
         let handle = unsafe { barvinok_sys::isl_pw_qpolynomial_get_space(self.handle.as_ptr()) };
         let handle = nonnull_or_alloc_error(handle);
@@ -257,33 +221,6 @@ impl<'a> PiecewiseQuasiPolynomial<'a> {
         }
     }
 }
-
-impl Clone for PiecewiseQuasiPolynomial<'_> {
-    fn clone(&self) -> Self {
-        let handle = unsafe { barvinok_sys::isl_pw_qpolynomial_copy(self.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-}
-impl Drop for PiecewiseQuasiPolynomial<'_> {
-    fn drop(&mut self) {
-        unsafe { barvinok_sys::isl_pw_qpolynomial_free(self.handle.as_ptr()) };
-    }
-}
-
-impl_isl_print!(
-    QuasiPolynomial,
-    isl_qpolynomial,
-    isl_printer_print_qpolynomial
-);
-impl_isl_print!(
-    PiecewiseQuasiPolynomial,
-    isl_pw_qpolynomial,
-    isl_printer_print_pw_qpolynomial
-);
 
 #[cfg(test)]
 mod tests {
