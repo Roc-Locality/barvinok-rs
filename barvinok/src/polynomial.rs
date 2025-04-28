@@ -296,6 +296,18 @@ impl<'a> Term<'a> {
     }
 }
 
+impl<'a> From<Term<'a>> for QuasiPolynomial<'a> {
+    fn from(term: Term<'a>) -> Self {
+        let this = ManuallyDrop::new(term);
+        let handle = unsafe { barvinok_sys::isl_qpolynomial_from_term(this.handle.as_ptr()) };
+        let handle = nonnull_or_alloc_error(handle);
+        QuasiPolynomial {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,6 +434,7 @@ mod tests {
                 println!("term exp(out): {:?}", term.exponent(DimType::Out, 0));
                 println!("term exp(param): {:?}", term.exponent(DimType::Param, 0));
                 println!("term coefficient: {:?}", term.coefficient());
+                println!("poly from term: {:?}", QuasiPolynomial::from(term));
                 Ok(())
             })
             .unwrap();
