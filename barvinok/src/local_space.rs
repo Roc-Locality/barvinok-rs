@@ -279,43 +279,49 @@ mod tests {
     #[test]
     fn test_local_space() {
         let ctx = Context::new();
-        let space = Space::new(&ctx, 0, 0, 3);
-        let local_space = LocalSpace::from(space.clone());
-        assert_eq!(
-            local_space.get_space().handle.as_ptr(),
-            space.handle.as_ptr()
-        );
-        assert_eq!(local_space.is_params(), Some(false));
-        assert_eq!(local_space.is_set(), Some(false));
-        assert_eq!(local_space.dim(DimType::Param), Some(0));
-        assert_eq!(local_space.dim(DimType::In), Some(0));
-        assert_eq!(local_space.dim(DimType::Out), Some(3));
-        println!("{:?}", local_space);
+        ctx.scope(|ctx| {
+            let space = Space::new(ctx, 2, 3, 4);
+            let local_space = LocalSpace::from(space.clone());
+            assert_eq!(
+                local_space.get_space().handle.as_ptr(),
+                space.handle.as_ptr()
+            );
+            assert_eq!(local_space.is_params(), Some(false));
+            assert_eq!(local_space.is_set(), Some(false));
+            assert_eq!(local_space.dim(DimType::Param), Some(2));
+            assert_eq!(local_space.dim(DimType::In), Some(3));
+            assert_eq!(local_space.dim(DimType::Out), Some(4));
+            println!("{:?}", local_space);
+        });
     }
 
     #[test]
     fn test_lifting_set_space() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 2, 3);
-        let local_space = LocalSpace::from(space.clone());
-        let lifted_space = local_space.lifting().unwrap();
-        println!("{:?}", lifted_space);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 2, 3);
+            let local_space = LocalSpace::from(space.clone());
+            let lifted_space = local_space.lifting().unwrap();
+            println!("{:?}", lifted_space);
+        });
     }
 
     #[test]
     fn test_mutate_shapes() {
         let ctx = Context::new();
-        let space = Space::new(&ctx, 2, 3, 4);
-        let mut local_space = LocalSpace::from(space.clone());
-        local_space.add_dims(DimType::Param, 2);
-        local_space.set_tuple_id(DimType::In, Ident::new(&ctx, "input").unwrap());
-        local_space.set_dim_name(DimType::Out, 0, "y").unwrap();
-        println!("{:?}", local_space);
-        assert!(local_space.get_dim_id(DimType::In, 0).is_none());
-        assert!(local_space.get_dim_id(DimType::Out, 0).is_some());
-        assert_eq!(
-            local_space.get_dim_name(DimType::Out, 0).unwrap(),
-            Some("y")
-        );
+        ctx.scope(|ctx| {
+            let space = Space::new(ctx, 2, 3, 4);
+            let mut local_space = LocalSpace::from(space.clone());
+            local_space.add_dims(DimType::Param, 2);
+            local_space.set_tuple_id(DimType::In, Ident::new(ctx, "input").unwrap());
+            local_space.set_dim_name(DimType::Out, 0, "y").unwrap();
+            println!("{:?}", local_space);
+            assert!(local_space.get_dim_id(DimType::In, 0).is_none());
+            assert!(local_space.get_dim_id(DimType::Out, 0).is_some());
+            assert_eq!(
+                local_space.get_dim_name(DimType::Out, 0).unwrap(),
+                Some("y")
+            );
+        });
     }
 }

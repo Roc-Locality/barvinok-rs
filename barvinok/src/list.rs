@@ -1,6 +1,6 @@
 use std::{mem::ManuallyDrop, ptr::NonNull};
 
-use crate::{Context, ContextRef, nonnull_or_alloc_error, printer::ISLPrint};
+use crate::{ContextRef, nonnull_or_alloc_error, printer::ISLPrint};
 
 #[allow(clippy::missing_safety_doc)]
 pub trait ListRawAPI {
@@ -280,7 +280,7 @@ pub struct List<'a, T: ListRawAPI> {
 }
 
 impl<'a, T: ListRawAPI + 'a> List<'a, T> {
-    pub fn new(ctx: &'a Context, capacity: usize) -> Self {
+    pub fn new(ctx: ContextRef<'a>, capacity: usize) -> Self {
         let handle = unsafe { T::list_alloc(ctx.0.as_ptr(), capacity as i32) };
         let handle = nonnull_or_alloc_error(handle);
         Self {
@@ -436,46 +436,53 @@ impl<'a, 'b, T: ListRawAPI + 'b> DoubleEndedIterator for Iter<'a, 'b, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Context;
     use crate::value::Value;
 
     #[test]
     fn test_list_creation_and_push() {
         let ctx = Context::new();
-        let mut list = List::<Value>::new(&ctx, 10);
-        assert_eq!(list.len(), 0);
-        let val = Value::new_ui(&ctx, 42);
-        list.push(val.clone() + val.clone());
-        list.push(val.clone() * val.clone());
-        list.push(val);
-        assert_eq!(list.len(), 3);
-        list.dump();
+        ctx.scope(|ctx| {
+            let mut list = List::<Value>::new(ctx, 10);
+            assert_eq!(list.len(), 0);
+            let val = Value::new_ui(ctx, 42);
+            list.push(val.clone() + val.clone());
+            list.push(val.clone() * val.clone());
+            list.push(val);
+            assert_eq!(list.len(), 3);
+            list.dump();
+        });
     }
 
     #[test]
     fn test_list_get() {
         let ctx = Context::new();
-        let mut list = List::<Value>::new(&ctx, 10);
-        let val1 = Value::new_ui(&ctx, 42);
-        let val2 = Value::new_ui(&ctx, 43);
-        list.push(val1.clone());
-        list.push(val2.clone());
-        assert!(list.get(0).unwrap() == val1);
-        assert!(list.get(1).unwrap() == val2);
-        assert!(list.get(2).is_none());
+        ctx.scope(|ctx| {
+            let mut list = List::<Value>::new(ctx, 10);
+            let val1 = Value::new_ui(ctx, 42);
+            let val2 = Value::new_ui(ctx, 43);
+            list.push(val1.clone());
+            list.push(val2.clone());
+            assert!(list.get(0).unwrap() == val1);
+            assert!(list.get(1).unwrap() == val2);
+            assert!(list.get(2).is_none());
+        });
     }
 
     #[test]
     fn test_list_set() {
         let ctx = Context::new();
-        let mut list = List::<Value>::new(&ctx, 10);
-        let val1 = Value::new_ui(&ctx, 42);
-        let val2 = Value::new_ui(&ctx, 43);
-        list.push(val1.clone());
-        list.push(val2.clone());
-        assert!(list.get(0).unwrap() == val1);
-        assert!(list.get(1).unwrap() == val2);
-        let val3 = Value::new_ui(&ctx, 44);
-        list.set(0, val3.clone());
-        assert!(list.get(0).unwrap() == val3);
+        ctx.scope(|ctx| {
+            let mut list = List::<Value>::new(ctx, 10);
+            let val1 = Value::new_ui(ctx, 42);
+            let val2 = Value::new_ui(ctx, 43);
+            list.push(val1.clone());
+            list.push(val2.clone());
+            assert!(list.get(0).unwrap() == val1);
+            assert!(list.get(1).unwrap() == val2);
+            let val3 = Value::new_ui(ctx, 44);
+            list.set(0, val3.clone());
+            assert!(list.get(0).unwrap() == val3);
+        });
     }
 }

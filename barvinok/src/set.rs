@@ -129,17 +129,20 @@ impl<'a> BasicSet<'a> {
     }
 }
 
-impl<'a> From<Constraint<'a>> for BasicSet<'a> {
-    fn from(constraint: Constraint<'a>) -> Self {
+impl<'a> TryFrom<Constraint<'a>> for BasicSet<'a> {
+    fn try_from(constraint: Constraint<'a>) -> Result<Self, crate::Error> {
+        let ctx = constraint.context_ref();
         let constraint = ManuallyDrop::new(constraint);
         let handle =
             unsafe { barvinok_sys::isl_basic_set_from_constraint(constraint.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        BasicSet {
+        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+        Ok(BasicSet {
             handle,
             marker: std::marker::PhantomData,
-        }
+        })
     }
+
+    type Error = crate::Error;
 }
 
 #[cfg(test)]
@@ -150,71 +153,81 @@ mod test {
     #[test]
     fn test_basic_set_creation() {
         let ctx = Context::new();
-        let space = Space::new(&ctx, 0, 0, 3);
-        let basic_set = BasicSet::new_universe(space.clone()).unwrap();
-        println!("{:?}", basic_set);
-        let basic_set = BasicSet::new_empty(space.clone()).unwrap();
-        println!("{:?}", basic_set);
-        let basic_set = BasicSet::new_nat_universe(space.clone()).unwrap();
-        println!("{:?}", basic_set);
-        let basic_set = BasicSet::new_positive_orthant(space.clone()).unwrap();
-        println!("{:?}", basic_set);
+        ctx.scope(|ctx| {
+            let space = Space::new(ctx, 0, 0, 3);
+            let basic_set = BasicSet::new_universe(space.clone()).unwrap();
+            println!("{:?}", basic_set);
+            let basic_set = BasicSet::new_empty(space.clone()).unwrap();
+            println!("{:?}", basic_set);
+            let basic_set = BasicSet::new_nat_universe(space.clone()).unwrap();
+            println!("{:?}", basic_set);
+            let basic_set = BasicSet::new_positive_orthant(space.clone()).unwrap();
+            println!("{:?}", basic_set);
+        });
     }
 
     #[test]
     fn test_basic_set_bin_ops() {
         let ctx = Context::new();
-        let space = Space::new(&ctx, 0, 0, 3);
-        let basic_set1 = BasicSet::new_universe(space.clone()).unwrap();
-        let basic_set2 = BasicSet::new_empty(space.clone()).unwrap();
-        let basic_set3 = basic_set1.intersect(basic_set2).unwrap();
-        println!("{:?}", basic_set3);
+        ctx.scope(|ctx| {
+            let space = Space::new(ctx, 0, 0, 3);
+            let basic_set1 = BasicSet::new_universe(space.clone()).unwrap();
+            let basic_set2 = BasicSet::new_empty(space.clone()).unwrap();
+            let basic_set3 = basic_set1.intersect(basic_set2).unwrap();
+            println!("{:?}", basic_set3);
+        });
     }
 
     #[test]
     fn test_basic_set_unary_ops() {
         let ctx = Context::new();
-        let space = Space::new(&ctx, 0, 0, 3);
-        let basic_set = BasicSet::new_positive_orthant(space.clone()).unwrap();
-        let basic_set = basic_set.affine_hull().unwrap();
-        println!("{:?}", basic_set);
+        ctx.scope(|ctx| {
+            let space = Space::new(ctx, 0, 0, 3);
+            let basic_set = BasicSet::new_positive_orthant(space.clone()).unwrap();
+            let basic_set = basic_set.affine_hull().unwrap();
+            println!("{:?}", basic_set);
+        });
     }
     #[test]
     fn test_basic_set_cardinality() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 4);
-        let basic_set = BasicSet::new_universe(space.clone()).unwrap();
-        let card = basic_set.cardinality().unwrap();
-        println!("{:?}", card);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 4);
+            let basic_set = BasicSet::new_universe(space.clone()).unwrap();
+            let card = basic_set.cardinality().unwrap();
+            println!("{:?}", card);
+        });
     }
     #[test]
     fn test_interval_product_space() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 3, 3);
-        let local_space = LocalSpace::from(space.clone());
-        let mut set = BasicSet::new_universe(space.clone()).unwrap();
-        for i in 0..3 {
-            {
-                let mut i_ge_0 = Constraint::new_inequality(local_space.clone());
-                i_ge_0 = i_ge_0.set_coefficient_si(DimType::Out, i, 1).unwrap();
-                set = set.add_constraint(i_ge_0).unwrap();
-                println!("{:?}", set);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 3, 3);
+            let local_space = LocalSpace::from(space.clone());
+            let mut set = BasicSet::new_universe(space.clone()).unwrap();
+            for i in 0..3 {
+                {
+                    let mut i_ge_0 = Constraint::new_inequality(local_space.clone());
+                    i_ge_0 = i_ge_0.set_coefficient_si(DimType::Out, i, 1).unwrap();
+                    set = set.add_constraint(i_ge_0).unwrap();
+                    println!("{:?}", set);
+                }
+                {
+                    let mut i_lt_p = Constraint::new_inequality(local_space.clone());
+                    i_lt_p = i_lt_p.set_coefficient_si(DimType::Param, i, 1).unwrap();
+                    i_lt_p = i_lt_p.set_coefficient_si(DimType::Out, i, -1).unwrap();
+                    i_lt_p = i_lt_p.set_constant_si(-1).unwrap();
+                    set = set.add_constraint(i_lt_p).unwrap();
+                    println!("{:?}", set);
+                }
             }
-            {
-                let mut i_lt_p = Constraint::new_inequality(local_space.clone());
-                i_lt_p = i_lt_p.set_coefficient_si(DimType::Param, i, 1).unwrap();
-                i_lt_p = i_lt_p.set_coefficient_si(DimType::Out, i, -1).unwrap();
-                i_lt_p = i_lt_p.set_constant_si(-1).unwrap();
-                set = set.add_constraint(i_lt_p).unwrap();
-                println!("{:?}", set);
+            let card = set.clone().cardinality().unwrap();
+            println!("{:?}", card);
+            println!("constraints:");
+            let list = set.get_constraints().unwrap();
+            for i in list.iter() {
+                println!("{:?}", i);
             }
-        }
-        let card = set.clone().cardinality().unwrap();
-        println!("{:?}", card);
-        println!("constraints:");
-        let list = set.get_constraints().unwrap();
-        for i in list.iter() {
-            println!("{:?}", i);
-        }
+        });
     }
 }

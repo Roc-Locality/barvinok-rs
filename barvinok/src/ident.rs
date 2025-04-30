@@ -1,4 +1,4 @@
-use crate::{Context, impl_isl_handle, nonnull_or_alloc_error};
+use crate::{ContextRef, impl_isl_handle, nonnull_or_alloc_error};
 use std::{any::Any, ptr::NonNull};
 
 impl_isl_handle!(Ident, id);
@@ -12,7 +12,7 @@ struct UserData<T> {
 }
 
 impl<'a> Ident<'a> {
-    pub fn new(ctx: &'a Context, name: &str) -> Result<Self, crate::Error> {
+    pub fn new(ctx: ContextRef<'a>, name: &str) -> Result<Self, crate::Error> {
         let cstring = std::ffi::CString::new(name)?;
 
         let handle = unsafe {
@@ -27,7 +27,7 @@ impl<'a> Ident<'a> {
         })
     }
     pub fn new_with_user<T: Any>(
-        ctx: &'a Context,
+        ctx: ContextRef<'a>,
         name: &str,
         user_data: T,
     ) -> Result<Self, crate::Error> {
@@ -97,54 +97,60 @@ mod tests {
     #[test]
     fn test_ident() {
         let ctx = Context::new();
-        let ident = Ident::new(&ctx, "x").unwrap();
-        assert_eq!(ident.name().unwrap(), "x");
-        assert_eq!(ident.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", ident);
+        ctx.scope(|ctx| {
+            let ident = Ident::new(ctx, "x").unwrap();
+            assert_eq!(ident.name().unwrap(), "x");
+            assert_eq!(ident.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", ident);
+        });
     }
 
     #[test]
     fn test_ident_with_user() {
         let ctx = Context::new();
-        let ident = Ident::new_with_user(&ctx, "x", 42).unwrap();
-        assert_eq!(ident.name().unwrap(), "x");
-        assert_eq!(ident.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        assert_eq!(
-            ident.get_user_ref().unwrap().downcast_ref::<i32>(),
-            Some(&42)
-        );
+        ctx.scope(|ctx| {
+            let ident = Ident::new_with_user(ctx, "x", 42).unwrap();
+            assert_eq!(ident.name().unwrap(), "x");
+            assert_eq!(ident.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            assert_eq!(
+                ident.get_user_ref().unwrap().downcast_ref::<i32>(),
+                Some(&42)
+            );
+        });
     }
 
     #[test]
     fn test_ident_lifetime() {
         let ctx = Context::new();
-        let drop_flag = Arc::new(AtomicBool::new(false));
-        struct Test(Arc<AtomicBool>);
-        impl Drop for Test {
-            fn drop(&mut self) {
-                self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        ctx.scope(|ctx| {
+            let drop_flag = Arc::new(AtomicBool::new(false));
+            struct Test(Arc<AtomicBool>);
+            impl Drop for Test {
+                fn drop(&mut self) {
+                    self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
             }
-        }
-        {
-            let user_data = Test(drop_flag.clone());
-            let ident = Ident::new_with_user(&ctx, "x", user_data).unwrap();
-            let ident2 = ident.clone();
-            let user = ident2.get_user_ref().unwrap();
-            assert!(
-                !user
-                    .downcast_ref::<Test>()
-                    .unwrap()
-                    .0
-                    .load(std::sync::atomic::Ordering::SeqCst)
-            );
-            assert!(
-                !ident
-                    .get_user_as::<Test>()
-                    .unwrap()
-                    .0
-                    .load(std::sync::atomic::Ordering::SeqCst)
-            );
-        }
-        assert!(drop_flag.load(std::sync::atomic::Ordering::SeqCst));
+            {
+                let user_data = Test(drop_flag.clone());
+                let ident = Ident::new_with_user(ctx, "x", user_data).unwrap();
+                let ident2 = ident.clone();
+                let user = ident2.get_user_ref().unwrap();
+                assert!(
+                    !user
+                        .downcast_ref::<Test>()
+                        .unwrap()
+                        .0
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                );
+                assert!(
+                    !ident
+                        .get_user_as::<Test>()
+                        .unwrap()
+                        .0
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                );
+            }
+            assert!(drop_flag.load(std::sync::atomic::Ordering::SeqCst));
+        });
     }
 }

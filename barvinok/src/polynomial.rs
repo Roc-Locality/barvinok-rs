@@ -212,7 +212,7 @@ impl<'a> QuasiPolynomial<'a> {
             func.state.into_inner()
         } else {
             match func.state.into_inner() {
-                Ok(()) => Err(self.context_ref().as_ref().last_error_or_unknown().into()),
+                Ok(()) => Err(self.context_ref().last_error_or_unknown().into()),
                 Err(e) => Err(e),
             }
         }
@@ -316,127 +316,149 @@ mod tests {
     #[test]
     fn test_quasi_polynomial_create() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let qpoly = QuasiPolynomial::new_zero_on_domain(space);
-        assert_eq!(qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", qpoly);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let qpoly = QuasiPolynomial::new_zero_on_domain(space);
+            assert_eq!(qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", qpoly);
+        });
     }
 
     #[test]
     fn test_quasi_polynomial_get_space() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let qpoly = QuasiPolynomial::new_one_on_domain(space);
-        let space2 = qpoly.get_space();
-        println!("{:?}", space2);
-        let space3 = qpoly.get_domain_space();
-        println!("{:?}", space3);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let qpoly = QuasiPolynomial::new_one_on_domain(space);
+            let space2 = qpoly.get_space();
+            println!("{:?}", space2);
+            let space3 = qpoly.get_domain_space();
+            println!("{:?}", space3);
+        });
     }
 
     #[test]
     fn test_quasi_polynomial_get_dim() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let qpoly = QuasiPolynomial::new_one_on_domain(space);
-        let dim = qpoly.get_dim(DimType::Param);
-        assert_eq!(dim, 1);
-        let dim = qpoly.get_dim(DimType::Out);
-        assert_eq!(dim, 1);
-        let dim = qpoly.get_dim(DimType::In);
-        assert_eq!(dim, 2);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let qpoly = QuasiPolynomial::new_one_on_domain(space);
+            let dim = qpoly.get_dim(DimType::Param);
+            assert_eq!(dim, 1);
+            let dim = qpoly.get_dim(DimType::Out);
+            assert_eq!(dim, 1);
+            let dim = qpoly.get_dim(DimType::In);
+            assert_eq!(dim, 2);
+        });
     }
 
     #[test]
     fn test_quasi_polynomial_new_val_on_domain() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let value = Value::new_si(&ctx, 42);
-        let qpoly = QuasiPolynomial::new_val_on_domain(space, value);
-        assert_eq!(qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", qpoly);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let value = Value::new_si(ctx, 42);
+            let qpoly = QuasiPolynomial::new_val_on_domain(space, value);
+            assert_eq!(qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", qpoly);
+        });
     }
 
     #[test]
     fn test_quasi_polynomial_new_var_on_domain() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let qpoly = QuasiPolynomial::new_var_on_domain(space.clone(), DimType::Param, 0).unwrap();
-        assert_eq!(qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", qpoly);
-        let qpoly2 = QuasiPolynomial::new_var_on_domain(space, DimType::Out, 1).unwrap();
-        assert_eq!(qpoly2.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", qpoly2);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let qpoly =
+                QuasiPolynomial::new_var_on_domain(space.clone(), DimType::Param, 0).unwrap();
+            assert_eq!(qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", qpoly);
+            let qpoly2 = QuasiPolynomial::new_var_on_domain(space, DimType::Out, 1).unwrap();
+            assert_eq!(qpoly2.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", qpoly2);
+        });
     }
 
     #[test]
     #[should_panic(expected = "VariablePositionOutOfBounds")]
     fn test_invalid_var_pos() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        QuasiPolynomial::new_var_on_domain(space, DimType::Param, 2).unwrap();
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            QuasiPolynomial::new_var_on_domain(space, DimType::Param, 2).unwrap();
+        });
     }
 
     #[test]
     fn test_quasi_polynomial_add() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let qpoly1 = QuasiPolynomial::new_one_on_domain(space.clone());
-        let qpoly2 = QuasiPolynomial::new_zero_on_domain(space);
-        let qpoly3 = qpoly1 + qpoly2;
-        assert_eq!(qpoly3.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", qpoly3);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let qpoly1 = QuasiPolynomial::new_one_on_domain(space.clone());
+            let qpoly2 = QuasiPolynomial::new_zero_on_domain(space);
+            let qpoly3 = qpoly1 + qpoly2;
+            assert_eq!(qpoly3.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", qpoly3);
+        });
     }
 
     #[test]
     fn test_quasi_polynomial_sub() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let qpoly1 = QuasiPolynomial::new_zero_on_domain(space.clone());
-        let qpoly2 = QuasiPolynomial::new_one_on_domain(space);
-        let qpoly3 = qpoly1 - qpoly2;
-        assert_eq!(qpoly3.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", qpoly3);
-        let val = qpoly3.get_constant_value();
-        assert!(val.is_some());
-        assert_eq!(val.unwrap().to_f64(), -1.0);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let qpoly1 = QuasiPolynomial::new_zero_on_domain(space.clone());
+            let qpoly2 = QuasiPolynomial::new_one_on_domain(space);
+            let qpoly3 = qpoly1 - qpoly2;
+            assert_eq!(qpoly3.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", qpoly3);
+            let val = qpoly3.get_constant_value();
+            assert!(val.is_some());
+            assert_eq!(val.unwrap().to_f64(), -1.0);
+        });
     }
 
     #[test]
     fn test_pw_qpolynomial_zero() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let pw_qpoly = PiecewiseQuasiPolynomial::new_zero(space);
-        assert_eq!(pw_qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", pw_qpoly);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let pw_qpoly = PiecewiseQuasiPolynomial::new_zero(space);
+            assert_eq!(pw_qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", pw_qpoly);
+        });
     }
 
     #[test]
     fn test_pw_qpolynomial_from_qpolynomial() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let qpoly = QuasiPolynomial::new_one_on_domain(space);
-        let pw_qpoly = PiecewiseQuasiPolynomial::from_qpolynomial(qpoly);
-        assert_eq!(pw_qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
-        println!("{:?}", pw_qpoly);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let qpoly = QuasiPolynomial::new_one_on_domain(space);
+            let pw_qpoly = PiecewiseQuasiPolynomial::from_qpolynomial(qpoly);
+            assert_eq!(pw_qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
+            println!("{:?}", pw_qpoly);
+        });
     }
 
     #[test]
     fn test_qpoly_foreach_term() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 1, 2);
-        let qpoly = QuasiPolynomial::new_one_on_domain(space);
-        qpoly
-            .foreach_term(|term| {
-                println!("term dim(in): {:?}", term.dim(DimType::In));
-                println!("term dim(out): {:?}", term.dim(DimType::Out));
-                println!("term dim(param): {:?}", term.dim(DimType::Param));
-                println!("term exp(in): {:?}", term.exponent(DimType::In, 0));
-                println!("term exp(out): {:?}", term.exponent(DimType::Out, 0));
-                println!("term exp(param): {:?}", term.exponent(DimType::Param, 0));
-                println!("term coefficient: {:?}", term.coefficient());
-                println!("poly from term: {:?}", QuasiPolynomial::from(term));
-                Ok(())
-            })
-            .unwrap();
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 2);
+            let qpoly = QuasiPolynomial::new_one_on_domain(space);
+            qpoly
+                .foreach_term(|term| {
+                    println!("term dim(in): {:?}", term.dim(DimType::In));
+                    println!("term dim(out): {:?}", term.dim(DimType::Out));
+                    println!("term dim(param): {:?}", term.dim(DimType::Param));
+                    println!("term exp(in): {:?}", term.exponent(DimType::In, 0));
+                    println!("term exp(out): {:?}", term.exponent(DimType::Out, 0));
+                    println!("term exp(param): {:?}", term.exponent(DimType::Param, 0));
+                    println!("term coefficient: {:?}", term.coefficient());
+                    Ok(())
+                })
+                .unwrap();
+        });
     }
 }

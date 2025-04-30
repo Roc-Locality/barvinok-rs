@@ -79,7 +79,7 @@ impl<'a> Constraint<'a> {
             )
         };
         if name.is_null() {
-            Err(self.context_ref().as_ref().last_error_or_unknown().into())
+            Err(self.context_ref().last_error_or_unknown().into())
         } else {
             let c_str = unsafe { std::ffi::CStr::from_ptr(name) };
             let slice = c_str.to_str()?;
@@ -117,7 +117,7 @@ impl<'a> Constraint<'a> {
                 handle,
                 marker: std::marker::PhantomData,
             })
-            .ok_or_else(|| ctx.as_ref().last_error_or_unknown().into())
+            .ok_or_else(|| ctx.last_error_or_unknown().into())
     }
     pub fn set_constant_val(self, value: Value<'a>) -> Result<Self, crate::Error> {
         let ctx = self.context_ref();
@@ -134,7 +134,7 @@ impl<'a> Constraint<'a> {
                 handle,
                 marker: std::marker::PhantomData,
             })
-            .ok_or_else(|| ctx.as_ref().last_error_or_unknown().into())
+            .ok_or_else(|| ctx.last_error_or_unknown().into())
     }
     pub fn set_coefficient_si(
         self,
@@ -157,7 +157,7 @@ impl<'a> Constraint<'a> {
                 handle,
                 marker: std::marker::PhantomData,
             })
-            .ok_or_else(|| ctx.as_ref().last_error_or_unknown().into())
+            .ok_or_else(|| ctx.last_error_or_unknown().into())
     }
     pub fn set_coefficient_val(
         self,
@@ -181,7 +181,7 @@ impl<'a> Constraint<'a> {
                 handle,
                 marker: std::marker::PhantomData,
             })
-            .ok_or_else(|| ctx.as_ref().last_error_or_unknown().into())
+            .ok_or_else(|| ctx.last_error_or_unknown().into())
     }
     pub fn get_div(&self, pos: u32) -> Option<Affine<'a>> {
         let handle =
@@ -296,77 +296,91 @@ mod tests {
     #[test]
     fn test_new_equality() {
         let context = Context::new();
-        let space = Space::new(&context, 1, 2, 2);
-        let local_space = LocalSpace::from(space);
-        let constraint = Constraint::new_equality(local_space);
-        println!("Constraint: {:?}", constraint);
+        context.scope(|context| {
+            let space = Space::new(context, 1, 2, 2);
+            let local_space = LocalSpace::from(space);
+            let constraint = Constraint::new_equality(local_space);
+            println!("Constraint: {:?}", constraint);
+        });
     }
 
     #[test]
     fn test_new_inequality() {
         let context = Context::new();
-        let space = Space::new(&context, 1, 2, 2);
-        let local_space = LocalSpace::from(space);
-        let constraint = Constraint::new_inequality(local_space);
-        println!("Constraint: {:?}", constraint);
+        context.scope(|context| {
+            let space = Space::new(context, 1, 2, 2);
+            let local_space = LocalSpace::from(space);
+            let constraint = Constraint::new_inequality(local_space);
+            println!("Constraint: {:?}", constraint);
+        });
     }
 
     #[test]
     fn test_inequality_constant_and_coeff() {
         let context = Context::new();
-        let space = Space::new(&context, 1, 2, 2);
-        let local_space = LocalSpace::from(space);
-        let constraint = Constraint::new_inequality(local_space);
-        let constant_val = constraint.get_constant();
-        println!("Constant Value: {:?}", constant_val);
-        let coeff_val = constraint.get_coefficient(DimType::Param, 0);
-        println!("Coefficient Value: {:?}", coeff_val);
+        context.scope(|context| {
+            let space = Space::new(context, 1, 2, 2);
+            let local_space = LocalSpace::from(space);
+            let constraint = Constraint::new_inequality(local_space);
+            let constant_val = constraint.get_constant();
+            println!("Constant Value: {:?}", constant_val);
+            let coeff_val = constraint.get_coefficient(DimType::Param, 0);
+            println!("Coefficient Value: {:?}", coeff_val);
+        });
     }
 
     #[test]
     fn test_set_constant_and_coeff() {
         let context = Context::new();
-        let space = Space::new(&context, 1, 2, 2);
-        let local_space = LocalSpace::from(space);
-        let mut constraint = Constraint::new_inequality(local_space);
-        constraint = constraint.set_constant_si(5).unwrap();
-        constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
-        println!("Updated Constraint: {:?}", constraint);
+        context.scope(|context| {
+            let space = Space::new(context, 1, 2, 2);
+            let local_space = LocalSpace::from(space);
+            let mut constraint = Constraint::new_inequality(local_space);
+            constraint = constraint.set_constant_si(5).unwrap();
+            constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
+            println!("Updated Constraint: {:?}", constraint);
+        });
     }
 
     #[test]
     fn test_negate() {
         let context = Context::new();
-        let space = Space::new(&context, 1, 2, 2);
-        let local_space = LocalSpace::from(space);
-        let mut constraint = Constraint::new_inequality(local_space);
-        constraint = constraint.set_constant_si(42).unwrap();
-        constraint = constraint.set_coefficient_si(DimType::Param, 0, 7).unwrap();
-        let negated_constraint = constraint.negate();
-        println!("Negated Constraint: {:?}", negated_constraint);
+        context.scope(|context| {
+            let space = Space::new(context, 1, 2, 2);
+            let local_space = LocalSpace::from(space);
+            let mut constraint = Constraint::new_inequality(local_space);
+            constraint = constraint.set_constant_si(5).unwrap();
+            constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
+            let negated_constraint = constraint.negate();
+            println!("Negated Constraint: {:?}", negated_constraint);
+        });
     }
 
     #[test]
     fn test_get_affine() {
         let context = Context::new();
-        let space = Space::new_set(&context, 1, 3);
-        let local_space = LocalSpace::from(space);
-        let mut constraint = Constraint::new_inequality(local_space);
-        constraint = constraint.set_constant_si(5).unwrap();
-        constraint = constraint.set_coefficient_si(DimType::Out, 0, 3).unwrap();
-        let affine = constraint.get_affine().unwrap();
-        println!("Affine: {:?}", affine);
+        context.scope(|context| {
+            let space = Space::new_set(context, 1, 2);
+            let local_space = LocalSpace::from(space);
+            let mut constraint = Constraint::new_inequality(local_space);
+            constraint = constraint.set_constant_si(5).unwrap();
+            constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
+            let affine = constraint.get_affine().unwrap();
+            println!("Affine: {:?}", affine);
+        });
     }
 
     #[test]
     fn test_into_basic_set() {
         let context = Context::new();
-        let space = Space::new_set(&context, 1, 3);
-        let local_space = LocalSpace::from(space);
-        let mut constraint = Constraint::new_inequality(local_space);
-        constraint = constraint.set_constant_si(5).unwrap();
-        constraint = constraint.set_coefficient_si(DimType::Out, 0, 3).unwrap();
-        let basic_set = BasicSet::from(constraint);
-        println!("Basic Set: {:?}", basic_set);
+        context.scope(|context| {
+            let space = Space::new_set(context, 1, 2);
+            let local_space = LocalSpace::from(space);
+            let mut constraint = Constraint::new_inequality(local_space);
+            constraint = constraint.set_constant_si(5).unwrap();
+            constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
+            let basic_set = BasicSet::try_from(constraint).unwrap();
+            println!("Basic Set: {:?}", basic_set);
+        });
     }
 }

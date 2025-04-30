@@ -1,7 +1,7 @@
 use num_traits::PrimInt;
 
 use crate::{
-    Context, impl_isl_handle, nonnull_or_alloc_error,
+    ContextRef, impl_isl_handle, nonnull_or_alloc_error,
     stat::{ContextResult, isl_bool_to_optional_bool},
 };
 
@@ -11,7 +11,7 @@ impl_isl_handle!(Value, val);
 
 macro_rules! isl_val_new {
     ($name:ident, $func:ident $(, $arg_name:ident : $arg_ty:ty)*) => {
-        pub fn $name(ctx: &'a Context $(, $arg_name: $arg_ty)*) -> Self {
+        pub fn $name(ctx: ContextRef<'a> $(, $arg_name: $arg_ty)*) -> Self {
             let handle = unsafe { barvinok_sys::$func(ctx.0.as_ptr() $(, $arg_name)*) };
             let handle = nonnull_or_alloc_error(handle);
             Self {
@@ -85,7 +85,7 @@ impl<'a> Value<'a> {
     isl_val_new!(new_si, isl_val_int_from_si, value: i64);
     isl_val_new!(new_ui, isl_val_int_from_ui, value: u64);
 
-    pub fn new_chunks<T: PrimInt>(ctx: &'a Context, value: &[T]) -> Self {
+    pub fn new_chunks<T: PrimInt>(ctx: ContextRef<'a>, value: &[T]) -> Self {
         let handle = unsafe {
             barvinok_sys::isl_val_int_from_chunks(
                 ctx.0.as_ptr(),
@@ -109,7 +109,7 @@ impl<'a> Value<'a> {
         unsafe { barvinok_sys::isl_val_get_den_si(self.handle.as_ptr()) }
     }
 
-    pub fn new_from_string(ctx: &'a Context, value: &str) -> crate::Result<Self> {
+    pub fn new_from_string(ctx: ContextRef<'a>, value: &str) -> crate::Result<Self> {
         let cstr = std::ffi::CString::new(value).map_err(|_| crate::Error::ParseError)?;
         let handle = unsafe { barvinok_sys::isl_val_read_from_str(ctx.0.as_ptr(), cstr.as_ptr()) };
         if handle.is_null() {
@@ -361,216 +361,254 @@ mod tests {
     #[test]
     fn test_value() {
         let ctx = Context::new();
-        let val = Value::new_si(&ctx, 42);
-        assert_eq!(val.numerator(), 42);
-        assert_eq!(val.denominator(), 1);
-        assert_eq!(val.to_f64(), 42.0);
+        ctx.scope(|ctx| {
+            let val = Value::new_si(ctx, 42);
+            assert_eq!(val.numerator(), 42);
+            assert_eq!(val.denominator(), 1);
+            assert_eq!(val.to_f64(), 42.0);
+        });
     }
 
     #[test]
     fn test_value_clone() {
         let ctx = Context::new();
-        let val = Value::new_si(&ctx, 42);
-        let val_clone = val.clone();
-        assert_eq!(val_clone.numerator(), 42);
-        assert_eq!(val_clone.denominator(), 1);
-        assert_eq!(val_clone.to_f64(), 42.0);
+        ctx.scope(|ctx| {
+            let val = Value::new_si(ctx, 42);
+            let val_clone = val.clone();
+            assert_eq!(val_clone.numerator(), 42);
+            assert_eq!(val_clone.denominator(), 1);
+            assert_eq!(val_clone.to_f64(), 42.0);
+        });
     }
 
     #[test]
     fn test_value_chunks() {
         let ctx = Context::new();
-        let val = Value::new_chunks(&ctx, &[0, 2, 2]);
-        assert!((val.to_f64() - 2.0f64.powi(33) - 2.0f64.powi(65)).abs() < f64::EPSILON);
+        ctx.scope(|ctx| {
+            let val = Value::new_chunks(ctx, &[0, 2, 2]);
+            assert!((val.to_f64() - 2.0f64.powi(33) - 2.0f64.powi(65)).abs() < f64::EPSILON);
+        });
     }
 
     #[test]
     fn test_value_abs_eq() {
         let ctx = Context::new();
-        let val1 = Value::new_si(&ctx, 42);
-        let val2 = Value::new_si(&ctx, -42);
-        assert!(val1.abs_eq(&val2).unwrap());
+        ctx.scope(|ctx| {
+            let val1 = Value::new_si(ctx, 42);
+            let val2 = Value::new_si(ctx, -42);
+            assert!(val1.abs_eq(&val2).unwrap());
+        });
     }
 
     #[test]
     fn test_value_cmp() {
         let ctx = Context::new();
-        let val1 = Value::new_si(&ctx, 42);
-        let val2 = Value::new_si(&ctx, 43);
-        assert!(val1 < val2);
-        assert!(val1 <= val2);
-        assert!(val2 > val1);
-        assert!(val2 >= val1);
-        assert!(val1 != val2);
-        assert!(val1 == val1);
-        assert!(val2 == val2);
+        ctx.scope(|ctx| {
+            let val1 = Value::new_si(ctx, 42);
+            let val2 = Value::new_si(ctx, 43);
+            assert!(val1 < val2);
+            assert!(val1 <= val2);
+            assert!(val2 > val1);
+            assert!(val2 >= val1);
+            assert!(val1 != val2);
+            assert!(val1 == val1);
+            assert!(val2 == val2);
+        });
     }
 
     #[test]
     fn test_value_special() {
         let ctx = Context::new();
-        let val_zero = Value::new_zero(&ctx);
-        let val_one = Value::new_one(&ctx);
-        let val_negone = Value::new_negone(&ctx);
-        let val_nan = Value::new_nan(&ctx);
-        let val_infty = Value::new_infty(&ctx);
-        let val_neg_infty = Value::new_neg_infty(&ctx);
+        ctx.scope(|ctx| {
+            let val_zero = Value::new_zero(ctx);
+            let val_one = Value::new_one(ctx);
+            let val_negone = Value::new_negone(ctx);
+            let val_nan = Value::new_nan(ctx);
+            let val_infty = Value::new_infty(ctx);
+            let val_neg_infty = Value::new_neg_infty(ctx);
 
-        assert!(val_zero.is_zero().unwrap());
-        assert!(val_one.is_one().unwrap());
-        assert!(val_negone.is_negone().unwrap());
-        assert!(val_nan.is_nan().unwrap());
-        assert!(val_infty.is_infty().unwrap());
-        assert!(val_neg_infty.is_neg_infty().unwrap());
+            assert!(val_zero.is_zero().unwrap());
+            assert!(val_one.is_one().unwrap());
+            assert!(val_negone.is_negone().unwrap());
+            assert!(val_nan.is_nan().unwrap());
+            assert!(val_infty.is_infty().unwrap());
+            assert!(val_neg_infty.is_neg_infty().unwrap());
 
-        // some random cross checkings
-        assert!(!val_zero.is_one().unwrap());
-        assert!(!val_one.is_zero().unwrap());
-        assert!(!val_zero.is_nan().unwrap());
-        assert!(!val_one.is_nan().unwrap());
-        assert!(!val_zero.is_infty().unwrap());
-        assert!(!val_one.is_infty().unwrap());
-        assert!(!val_zero.is_neg_infty().unwrap());
-        assert!(!val_one.is_neg_infty().unwrap());
-        assert!(!val_nan.is_zero().unwrap());
+            // some random cross checkings
+            assert!(!val_zero.is_one().unwrap());
+            assert!(!val_one.is_zero().unwrap());
+            assert!(!val_zero.is_nan().unwrap());
+            assert!(!val_one.is_nan().unwrap());
+            assert!(!val_zero.is_infty().unwrap());
+            assert!(!val_one.is_infty().unwrap());
+            assert!(!val_zero.is_neg_infty().unwrap());
+            assert!(!val_one.is_neg_infty().unwrap());
+            assert!(!val_nan.is_zero().unwrap());
+        });
     }
 
     #[test]
     fn test_value_divisible_by() {
         let ctx = Context::new();
-        let val1 = Value::new_si(&ctx, 42);
-        let val2 = Value::new_si(&ctx, 7);
-        assert!(val1.divisible_by(&val2).unwrap());
-        assert!(!val2.divisible_by(&val1).unwrap());
+        ctx.scope(|ctx| {
+            let val1 = Value::new_si(ctx, 42);
+            let val2 = Value::new_si(ctx, 7);
+            assert!(val1.divisible_by(&val2).unwrap());
+            assert!(!val2.divisible_by(&val1).unwrap());
+        });
     }
 
     #[test]
     fn test_value_cmp_si() {
         let ctx = Context::new();
-        let val = Value::new_si(&ctx, 42);
-        assert_eq!(val.cmp_si(42), Some(std::cmp::Ordering::Equal));
-        assert_eq!(val.cmp_si(43), Some(std::cmp::Ordering::Less));
-        assert_eq!(val.cmp_si(41), Some(std::cmp::Ordering::Greater));
-        assert_eq!(val.cmp_si(0), Some(std::cmp::Ordering::Greater));
+        ctx.scope(|ctx| {
+            let val = Value::new_si(ctx, 42);
+            assert_eq!(val.cmp_si(42), Some(std::cmp::Ordering::Equal));
+            assert_eq!(val.cmp_si(43), Some(std::cmp::Ordering::Less));
+            assert_eq!(val.cmp_si(41), Some(std::cmp::Ordering::Greater));
+            assert_eq!(val.cmp_si(0), Some(std::cmp::Ordering::Greater));
+        });
     }
 
     #[test]
     fn test_unary_methods() {
         let ctx = Context::new();
-        let val = Value::new_si(&ctx, 42);
-        assert_eq!(val.clone().abs().to_f64(), 42.0);
-        assert_eq!(val.clone().floor().to_f64(), 42.0);
-        assert_eq!(val.clone().ceil().to_f64(), 42.0);
-        assert_eq!(val.clone().trunc().to_f64(), 42.0);
-        assert_eq!(val.clone().inv().to_f64(), 1.0 / 42.0);
-        assert_eq!(val.clone().neg().to_f64(), -42.0);
+        ctx.scope(|ctx| {
+            let val = Value::new_si(ctx, 42);
+            assert_eq!(val.clone().abs().to_f64(), 42.0);
+            assert_eq!(val.clone().floor().to_f64(), 42.0);
+            assert_eq!(val.clone().ceil().to_f64(), 42.0);
+            assert_eq!(val.clone().trunc().to_f64(), 42.0);
+            assert_eq!(val.clone().inv().to_f64(), 1.0 / 42.0);
+            assert_eq!(val.clone().neg().to_f64(), -42.0);
+        });
     }
 
     #[test]
     fn test_binary_methods() {
         let ctx = Context::new();
-        let val1 = Value::new_si(&ctx, 42);
-        let val2 = Value::new_si(&ctx, 7);
-        assert_eq!((val1.clone() + val2.clone()).to_f64(), 49.0);
-        assert_eq!((val1.clone() - val2.clone()).to_f64(), 35.0);
-        assert_eq!((val1.clone() * val2.clone()).to_f64(), 294.0);
-        assert_eq!((val1.clone() / val2.clone()).to_f64(), 6.0);
+        ctx.scope(|ctx| {
+            let val1 = Value::new_si(ctx, 42);
+            let val2 = Value::new_si(ctx, 7);
+            assert_eq!((val1.clone() + val2.clone()).to_f64(), 49.0);
+            assert_eq!((val1.clone() - val2.clone()).to_f64(), 35.0);
+            assert_eq!((val1.clone() * val2.clone()).to_f64(), 294.0);
+            assert_eq!((val1.clone() / val2.clone()).to_f64(), 6.0);
+        });
     }
 
     #[test]
     fn test_binary_methods_ui() {
         let ctx = Context::new();
-        let val = Value::new_si(&ctx, 42);
-        assert_eq!(val.clone().add_ui(7).to_f64(), 49.0);
-        assert_eq!(val.clone().sub_ui(7).to_f64(), 35.0);
-        assert_eq!(val.clone().mul_ui(7).to_f64(), 294.0);
-        assert_eq!(val.clone().div_ui(7).to_f64(), 6.0);
+        ctx.scope(|ctx| {
+            let val1 = Value::new_si(ctx, 42);
+            assert_eq!(val1.clone().add_ui(7).to_f64(), 49.0);
+            assert_eq!(val1.clone().sub_ui(7).to_f64(), 35.0);
+            assert_eq!(val1.clone().mul_ui(7).to_f64(), 294.0);
+            assert_eq!(val1.clone().div_ui(7).to_f64(), 6.0);
+        });
     }
 
     #[test]
     fn test_val_exp2() {
         let ctx = Context::new();
-        let val = Value::new_nan(&ctx);
-        assert!(val.checked_exp2().is_err());
-        let val = Value::new_si(&ctx, 42);
-        let val = val.checked_exp2().unwrap();
-        assert_eq!(val.to_f64(), 2.0f64.powi(42));
+        ctx.scope(|ctx| {
+            let val = Value::new_nan(ctx);
+            assert!(val.checked_exp2().is_err());
+            let val = Value::new_si(ctx, 42);
+            let val = val.checked_exp2().unwrap();
+            assert_eq!(val.to_f64(), 2.0f64.powi(42));
+        });
     }
 
     #[test]
     fn test_division_like_int_operations() {
         let ctx = Context::new();
-        let val1 = Value::new_si(&ctx, 42);
-        let val2 = Value::new_si(&ctx, 7);
-        assert_eq!(
-            val1.clone().checked_rem(val2.clone()).unwrap().to_f64(),
-            0.0
-        );
-        assert_eq!(
-            val1.clone().checked_gcd(val2.clone()).unwrap().to_f64(),
-            7.0
-        );
-        let (gcd, x, y) = val1.checked_exgcd(val2.clone()).unwrap();
-        assert_eq!(gcd.to_f64(), 7.0);
-        assert_eq!(x.to_f64(), 0.0);
-        assert_eq!(y.to_f64(), 1.0);
+        ctx.scope(|ctx| {
+            let val1 = Value::new_si(ctx, 42);
+            let val2 = Value::new_si(ctx, 7);
+            assert_eq!(
+                val1.clone().checked_rem(val2.clone()).unwrap().to_f64(),
+                0.0
+            );
+            assert_eq!(
+                val1.clone().checked_gcd(val2.clone()).unwrap().to_f64(),
+                7.0
+            );
+            let (gcd, x, y) = val1.checked_exgcd(val2.clone()).unwrap();
+            assert_eq!(gcd.to_f64(), 7.0);
+            assert_eq!(x.to_f64(), 0.0);
+            assert_eq!(y.to_f64(), 1.0);
+        });
     }
 
     #[test]
     fn test_create_val_from_ctx_ref() {
         let ctx = Context::new();
-        let val = Value::new_si(&ctx, 42);
-        let ctx_ref = val.context_ref();
-        let val2 = Value::new_si(ctx_ref.as_ref(), 42);
-        assert_eq!(val2.numerator(), 42);
-        assert_eq!(val2.denominator(), 1);
+        ctx.scope(|ctx| {
+            let val = Value::new_si(ctx, 42);
+            let ctx_ref = val.context_ref();
+            let val2 = Value::new_si(ctx_ref, 42);
+            assert_eq!(val2.numerator(), 42);
+            assert_eq!(val2.denominator(), 1);
+            let added = val + val2;
+            assert_eq!(added.numerator(), 84);
+        });
     }
 
     #[test]
     fn test_print_inv() {
         let ctx = Context::new();
-        let val = Value::new_si(&ctx, 42);
-        println!("val: {:?}", val);
-        let val_inv = val.clone().inv();
-        println!("val_inv: {:?}", val_inv);
+        ctx.scope(|ctx| {
+            let val = Value::new_si(ctx, 42);
+            println!("val: {:?}", val);
+            let val_inv = val.clone().inv();
+            println!("val_inv: {:?}", val_inv);
+        });
     }
 
     #[test]
     fn test_new_from_string() {
         let ctx = Context::new();
-        let val = Value::new_from_string(&ctx, "42").unwrap();
-        assert_eq!(val.numerator(), 42);
-        assert_eq!(val.denominator(), 1);
-        assert_eq!(val.to_f64(), 42.0);
+        ctx.scope(|ctx| {
+            let val = Value::new_from_string(ctx, "42").unwrap();
+            assert_eq!(val.numerator(), 42);
+            assert_eq!(val.denominator(), 1);
+            assert_eq!(val.to_f64(), 42.0);
 
-        let val = Value::new_from_string(&ctx, "nan");
-        assert!(val.unwrap().is_nan().unwrap());
+            let val = Value::new_from_string(ctx, "nan");
+            assert!(val.unwrap().is_nan().unwrap());
 
-        let val = Value::new_from_string(&ctx, "infty");
-        assert!(val.unwrap().is_infty().unwrap());
+            let val = Value::new_from_string(ctx, "infty");
+            assert!(val.unwrap().is_infty().unwrap());
 
-        let val = Value::new_from_string(&ctx, "5/12").unwrap();
-        assert_eq!(val.numerator(), 5);
-        assert_eq!(val.denominator(), 12);
+            let val = Value::new_from_string(ctx, "5/12").unwrap();
+            assert_eq!(val.numerator(), 5);
+            assert_eq!(val.denominator(), 12);
+        });
     }
 
     #[test]
     fn test_dump_empty_list() {
         type ValueList<'a> = crate::list::List<'a, Value<'a>>;
         let ctx = Context::new();
-        let val_list = ValueList::new(&ctx, 9);
-        println!("val_list: {:?}", val_list);
+        ctx.scope(|ctx| {
+            let val_list = ValueList::new(ctx, 9);
+            println!("val_list: {:?}", val_list);
+        });
     }
 
     #[test]
     fn test_add_to_list() {
         type ValueList<'a> = crate::list::List<'a, Value<'a>>;
         let ctx = Context::new();
-        let mut val_list = ValueList::new(&ctx, 9);
-        let val1 = Value::new_si(&ctx, 42);
-        let val2 = Value::new_si(&ctx, 7);
-        val_list.push(val1);
-        val_list.push(val2);
-        println!("val_list: {:?}", val_list);
+        ctx.scope(|ctx| {
+            let mut val_list = ValueList::new(ctx, 9);
+            let val1 = Value::new_si(ctx, 42);
+            let val2 = Value::new_si(ctx, 7);
+            val_list.push(val1);
+            val_list.push(val2);
+            println!("val_list: {:?}", val_list);
+        });
     }
 }

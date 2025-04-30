@@ -4,7 +4,7 @@ use std::mem::ManuallyDrop;
 use barvinok_sys::isl_dim_type;
 
 use crate::stat::isl_size_to_optional_u32;
-use crate::{Context, ident::Ident, nonnull_or_alloc_error, stat::isl_bool_to_optional_bool};
+use crate::{ContextRef, ident::Ident, nonnull_or_alloc_error, stat::isl_bool_to_optional_bool};
 use crate::{DimType, impl_isl_handle};
 
 impl_isl_handle!(Space, space);
@@ -12,7 +12,7 @@ impl_isl_handle!(Space, space);
 macro_rules! space_constructor {
     // Pattern with additional arguments
     ($name:ident, $sys_fn:ident $(, $arg:ident : $arg_ty:ty)*) => {
-        pub fn $name(ctx: &'a Context $(, $arg: $arg_ty)*) -> Self {
+        pub fn $name(ctx: ContextRef<'a> $(, $arg: $arg_ty)*) -> Self {
             let handle = unsafe {
                 barvinok_sys::$sys_fn(ctx.0.as_ptr() $(, $arg)*)
             };
@@ -101,57 +101,71 @@ mod tests {
     #[test]
     fn test_space_creation() {
         let ctx = Context::new();
-        let space = Space::new(&ctx, 2, 4, 3);
-        println!("{:?}", space);
+        ctx.scope(|ctx| {
+            let space = Space::new(ctx, 2, 4, 3);
+            println!("{:?}", space);
+        });
     }
 
     #[test]
     fn test_space_params() {
         let ctx = Context::new();
-        let space = Space::new_params(&ctx, 2);
-        println!("{:?}", space);
+        ctx.scope(|ctx| {
+            let space = Space::new_params(ctx, 2);
+            println!("{:?}", space);
+        });
     }
 
     #[test]
     fn test_space_unit() {
         let ctx = Context::new();
-        let space = Space::new_unit(&ctx);
-        println!("{:?}", space);
+        ctx.scope(|ctx| {
+            let space = Space::new_unit(ctx);
+            println!("{:?}", space);
+        });
     }
 
     #[test]
     fn test_space_set() {
         let ctx = Context::new();
-        let space = Space::new_set(&ctx, 2, 3);
-        println!("{:?}", space);
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 2, 4);
+            println!("{:?}", space);
+        });
     }
 
     #[test]
     fn test_space_add_param_id() {
         let ctx = Context::new();
-        let mut space = Space::new_set(&ctx, 2, 4);
-        let id = Ident::new(&ctx, "x").unwrap();
-        space.add_param_id(id);
-        println!("{:?}", space);
+        ctx.scope(|ctx| {
+            let mut space = Space::new_set(ctx, 2, 4);
+            let id = Ident::new(ctx, "x").unwrap();
+            space.add_param_id(id);
+            println!("{:?}", space);
+        });
     }
 
     #[test]
     fn test_space_set_tuple_name() {
         let ctx = Context::new();
-        let mut space = Space::new_set(&ctx, 2, 4);
-        space.set_tuple_name(DimType::In, "input").unwrap();
-        println!("{:?}", space);
-        assert!(space.has_tuple_name(DimType::In).unwrap());
-        assert_eq!(space.get_tuple_name(DimType::In).unwrap(), "input");
+        ctx.scope(|ctx| {
+            let mut space = Space::new_set(ctx, 2, 4);
+            space.set_tuple_name(DimType::In, "input").unwrap();
+            println!("{:?}", space);
+            assert!(space.has_tuple_name(DimType::In).unwrap());
+            assert_eq!(space.get_tuple_name(DimType::In).unwrap(), "input");
+        });
     }
 
     #[test]
     fn test_space_add_dims() {
         let ctx = Context::new();
-        let mut space = Space::new_set(&ctx, 2, 4);
-        assert!(space.is_set().unwrap());
-        space.add_dims(DimType::In, 2);
-        println!("{:?}", space);
-        assert!(space.is_map().unwrap());
+        ctx.scope(|ctx| {
+            let mut space = Space::new_set(ctx, 2, 4);
+            assert!(space.is_set().unwrap());
+            space.add_dims(DimType::In, 2);
+            println!("{:?}", space);
+            assert!(space.is_map().unwrap());
+        });
     }
 }

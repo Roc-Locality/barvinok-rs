@@ -87,26 +87,15 @@ impl Default for Context {
     }
 }
 
+#[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct ContextRef<'a>(NonNull<barvinok_sys::isl_ctx>, PhantomData<*mut &'a ()>);
+pub struct ContextRef<'a>(
+    NonNull<barvinok_sys::isl_ctx>,
+    PhantomData<*mut &'a Context>,
+);
 
 #[allow(clippy::should_implement_trait)]
 impl<'a> ContextRef<'a> {
-    pub fn as_ref(&self) -> &'a Context {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-impl Context {
-    pub fn new() -> Self {
-        let ctx = unsafe { barvinok_sys::isl_ctx_alloc() };
-        unsafe {
-            isl_options_set_on_error(ctx, 0);
-        }
-        let ctx = nonnull_or_alloc_error(ctx);
-
-        Self(ctx)
-    }
     pub fn set_max_operations(&self, max_operations: usize) {
         unsafe { barvinok_sys::isl_ctx_set_max_operations(self.0.as_ptr(), max_operations as u64) }
     }
@@ -123,6 +112,25 @@ impl Context {
     }
     pub fn last_error_or_unknown(&self) -> ISLError {
         self.last_error().unwrap_or(ISLError::Unknown)
+    }
+}
+
+impl Context {
+    pub fn new() -> Self {
+        let ctx = unsafe { barvinok_sys::isl_ctx_alloc() };
+        unsafe {
+            isl_options_set_on_error(ctx, 0);
+        }
+        let ctx = nonnull_or_alloc_error(ctx);
+
+        Self(ctx)
+    }
+    pub fn scope<F, T>(&self, f: F) -> T
+    where
+        F: for<'a> FnOnce(ContextRef<'a>) -> T,
+    {
+        let ctx = ContextRef(self.0, PhantomData);
+        f(ctx)
     }
 }
 

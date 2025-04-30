@@ -22,7 +22,7 @@ impl ContextResult<bool> for Option<bool> {
     fn context_result<'a>(self, ctx: ContextRef<'a>) -> Result<bool, ISLError> {
         match self {
             Some(x) => Ok(x),
-            None => Err(ctx.as_ref().last_error_or_unknown()),
+            None => Err(ctx.last_error_or_unknown()),
         }
     }
 }
@@ -31,7 +31,7 @@ impl ContextResult<u32> for Option<u32> {
     fn context_result<'a>(self, ctx: ContextRef<'a>) -> Result<u32, ISLError> {
         match self {
             Some(x) => Ok(x),
-            None => Err(ctx.as_ref().last_error_or_unknown()),
+            None => Err(ctx.last_error_or_unknown()),
         }
     }
 }
