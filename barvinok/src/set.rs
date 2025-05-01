@@ -1,14 +1,7 @@
 use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{
-    DimType,
-    constraint::Constraint,
-    impl_isl_handle,
-    list::List,
-    nonnull_or_alloc_error,
-    polynomial::PiecewiseQuasiPolynomial,
-    space::Space,
-    stat::{ContextResult, isl_size_to_optional_u32},
+    constraint::Constraint, impl_isl_handle, list::List, map::BasicMap, nonnull_or_alloc_error, polynomial::PiecewiseQuasiPolynomial, space::Space, stat::{isl_size_to_optional_u32, ContextResult}, DimType
 };
 
 impl_isl_handle!(Set, set);
@@ -123,6 +116,17 @@ impl<'a> BasicSet<'a> {
         let handle =
             unsafe { barvinok_sys::isl_basic_set_get_constraint_list(self.handle.as_ptr()) };
         NonNull::new(handle).map(|handle| List {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    pub fn apply(self, map : BasicMap<'a>) -> Option<Self> {
+        let this = ManuallyDrop::new(self);
+        let map = ManuallyDrop::new(map);
+        let handle = unsafe {
+            barvinok_sys::isl_basic_set_apply(this.handle.as_ptr(), map.handle.as_ptr())
+        };
+        NonNull::new(handle).map(|handle| BasicSet {
             handle,
             marker: std::marker::PhantomData,
         })
