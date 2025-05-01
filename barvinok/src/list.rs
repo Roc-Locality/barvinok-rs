@@ -290,6 +290,38 @@ impl_list_raw_api!(
     }
 );
 
+impl_list_raw_api!(
+    crate::set::Set<'_>,
+    handle = barvinok_sys::isl_set,
+    list_handle = barvinok_sys::isl_set_list,
+    prefix = set,
+    unsafe fn get_handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr()
+    },
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+);
+
+impl_list_raw_api!(
+    crate::set::BasicSet<'_>,
+    handle = barvinok_sys::isl_basic_set,
+    list_handle = barvinok_sys::isl_basic_set_list,
+    prefix = basic_set,
+    unsafe fn get_handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr()
+    },
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+);
+
 pub struct List<'a, T: ListRawAPI> {
     pub(crate) handle: NonNull<T::ListHandle>,
     pub(crate) marker: std::marker::PhantomData<*mut &'a [&'a T]>,
