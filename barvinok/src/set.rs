@@ -10,7 +10,7 @@ use crate::{
     nonnull_or_alloc_error,
     polynomial::PiecewiseQuasiPolynomial,
     space::Space,
-    stat::{ContextResult, isl_bool_to_optional_bool, isl_size_to_optional_u32},
+    stat::{isl_bool_to_optional_bool, isl_size_to_optional_u32},
 };
 
 impl_isl_handle!(Set, set);
@@ -20,14 +20,10 @@ macro_rules! basic_set_constructor {
     ($fn_name:ident, $isl_fn:ident) => {
         paste::paste! {
             pub fn [<new_ $fn_name>](space: Space<'a>) -> Result<Self, crate::Error> {
-                if space.get_dim(crate::DimType::In)
-                    .context_result(space.context_ref())? != 0
-                {
-                    return Err(crate::ISLError::Invalid.into());
-                }
+                let ctx = space.context_ref();
                 let space = ManuallyDrop::new(space);
                 let handle = unsafe { barvinok_sys::$isl_fn(space.handle.as_ptr()) };
-                let handle = nonnull_or_alloc_error(handle);
+                let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
                 Ok(Self {
                     handle,
                     marker: std::marker::PhantomData,

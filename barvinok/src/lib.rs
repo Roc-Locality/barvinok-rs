@@ -20,7 +20,7 @@ mod stat;
 
 #[derive(Debug, thiserror::Error)]
 #[repr(u32)]
-pub enum ISLError {
+pub enum ISLErrorKind {
     #[error("operation aborted")]
     Abort = barvinok_sys::isl_error_isl_error_abort,
     #[error("memory allocation error")]
@@ -37,17 +37,24 @@ pub enum ISLError {
     Unsupported = barvinok_sys::isl_error_isl_error_unsupported,
 }
 
-impl From<barvinok_sys::isl_error> for ISLError {
+#[derive(Debug, thiserror::Error)]
+#[error("isl error({kind:?}): {message}")]
+pub struct ISLError {
+    kind: ISLErrorKind,
+    message: String,
+}
+
+impl From<barvinok_sys::isl_error> for ISLErrorKind {
     fn from(value: barvinok_sys::isl_error) -> Self {
         match value {
-            barvinok_sys::isl_error_isl_error_abort => ISLError::Abort,
-            barvinok_sys::isl_error_isl_error_alloc => ISLError::Alloc,
-            barvinok_sys::isl_error_isl_error_unknown => ISLError::Unknown,
-            barvinok_sys::isl_error_isl_error_internal => ISLError::Internal,
-            barvinok_sys::isl_error_isl_error_invalid => ISLError::Invalid,
-            barvinok_sys::isl_error_isl_error_quota => ISLError::Quota,
-            barvinok_sys::isl_error_isl_error_unsupported => ISLError::Unsupported,
-            _ => ISLError::Unknown,
+            barvinok_sys::isl_error_isl_error_abort => ISLErrorKind::Abort,
+            barvinok_sys::isl_error_isl_error_alloc => ISLErrorKind::Alloc,
+            barvinok_sys::isl_error_isl_error_unknown => ISLErrorKind::Unknown,
+            barvinok_sys::isl_error_isl_error_internal => ISLErrorKind::Internal,
+            barvinok_sys::isl_error_isl_error_invalid => ISLErrorKind::Invalid,
+            barvinok_sys::isl_error_isl_error_quota => ISLErrorKind::Quota,
+            barvinok_sys::isl_error_isl_error_unsupported => ISLErrorKind::Unsupported,
+            _ => ISLErrorKind::Unknown,
         }
     }
 }
@@ -107,11 +114,24 @@ impl<'a> ContextRef<'a> {
         if err == barvinok_sys::isl_error_isl_error_none {
             None
         } else {
-            Some(err.into())
+            let message = unsafe {
+                let message = barvinok_sys::isl_ctx_last_error_msg(self.0.as_ptr());
+                std::ffi::CStr::from_ptr(message)
+                    .to_str()
+                    .unwrap_or("unknown error")
+                    .to_string()
+            };
+            Some(ISLError {
+                kind: err.into(),
+                message,
+            })
         }
     }
     pub fn last_error_or_unknown(&self) -> ISLError {
-        self.last_error().unwrap_or(ISLError::Unknown)
+        self.last_error().unwrap_or(ISLError {
+            kind: ISLErrorKind::Unknown,
+            message: "unknown error".to_string(),
+        })
     }
 }
 
@@ -119,7 +139,7 @@ impl Context {
     pub fn new() -> Self {
         let ctx = unsafe { barvinok_sys::isl_ctx_alloc() };
         unsafe {
-            isl_options_set_on_error(ctx, 0);
+            isl_options_set_on_error(ctx, 1);
         }
         let ctx = nonnull_or_alloc_error(ctx);
 
