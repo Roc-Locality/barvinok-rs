@@ -274,6 +274,22 @@ impl_list_raw_api!(
     }
 );
 
+impl_list_raw_api!(
+    crate::aff::Affine<'_>,
+    handle = barvinok_sys::isl_aff,
+    list_handle = barvinok_sys::isl_aff_list,
+    prefix = aff,
+    unsafe fn get_handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr()
+    },
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+);
+
 pub struct List<'a, T: ListRawAPI> {
     pub(crate) handle: NonNull<T::ListHandle>,
     pub(crate) marker: std::marker::PhantomData<*mut &'a [&'a T]>,
