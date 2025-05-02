@@ -83,10 +83,22 @@ impl<'a> BasicMap<'a> {
     }
 }
 
-macro_rules! map_value_ctor {
+macro_rules! map_ctor {
+    (@get_access [trivial] $val:ident) => {
+        $val
+    };
+    (@get_access [managed] $val:ident) => {
+        $val.handle.as_ptr()
+    };
+    (@take [trivial] $val:ident) => {
+        $val
+    };
+    (@take [managed] $val:ident) => {
+        ManuallyDrop::new($val)
+    };
     ($func:ident, $sys_fn:ident,
      $first_name:ident : $first_ty:ty
-     $(, $name:ident : $ty:ty )* $(,)? ) => {
+     $(, [$kind:ident] $name:ident : $ty:ty )* $(,)? ) => {
         pub fn $func(
             $first_name: $first_ty
             $(, $name: $ty )*
@@ -96,14 +108,60 @@ macro_rules! map_value_ctor {
             // consume each arg into ManuallyDrop
             let $first_name = std::mem::ManuallyDrop::new($first_name);
             $(
-                let $name = std::mem::ManuallyDrop::new($name);
+                let $name = map_ctor!(@take [$kind] $name);
             )*
 
             // call the raw C function
             let raw = unsafe {
                 barvinok_sys::$sys_fn(
                     $first_name.handle.as_ptr()
-                    $(, $name.handle.as_ptr() )*
+                    $(, map_ctor!(@get_access [$kind] $name) )*
+                )
+            };
+
+            // wrap in NonNull, use saved `ctx` on error
+            NonNull::new(raw)
+                .ok_or_else(|| ctx.last_error_or_unknown().into())
+                .map(|handle| Self {
+                    handle,
+                    marker: std::marker::PhantomData,
+                })
+        }
+    };
+}
+
+macro_rules! map_transform {
+    (@get_access [trivial] $val:ident) => {
+        $val
+    };
+    (@get_access [managed] $val:ident) => {
+        $val.handle.as_ptr()
+    };
+    (@take [trivial] $val:ident) => {
+        $val
+    };
+    (@take [managed] $val:ident) => {
+        ManuallyDrop::new($val)
+    };
+    ($func:ident, $sys_fn:ident
+     $(, [$kind:ident] $name:ident : $ty:ty )* $(,)? ) => {
+        pub fn $func(
+            self: Self,
+            $(, $name: $ty )*
+        ) -> Result<Self, crate::Error> {
+            // pull the ContextRef from the first argument
+            let ctx = self.context_ref();
+            // consume each arg into ManuallyDrop
+            let this = std::mem::ManuallyDrop::new(self);
+            $(
+                let $name = map_transform!(@take [$kind] $name);
+            )*
+
+            // call the raw C function
+            let raw = unsafe {
+                barvinok_sys::$sys_fn(
+                    this.handle.as_ptr()
+                    $(, map_transform!(@get_access [$kind] $name) )*
                 )
             };
 
@@ -132,10 +190,19 @@ impl<'a> Map<'a> {
         isl_size_to_optional_u32(handle)
     }
     map_get_managed!([keep] get_space, map, Space);
-    map_value_ctor!(lex_lt,    isl_map_lex_lt,    space: Space<'a>);
-    map_value_ctor!(lex_le,    isl_map_lex_le,    space: Space<'a>);
-    map_value_ctor!(lex_ge,    isl_map_lex_ge,    space: Space<'a>);
-    map_value_ctor!(lex_gt,    isl_map_lex_gt,    space: Space<'a>);
+    map_ctor!(lex_lt, isl_map_lex_lt, space: Space<'a>);
+    map_ctor!(lex_le, isl_map_lex_le, space: Space<'a>);
+    map_ctor!(lex_ge, isl_map_lex_ge, space: Space<'a>);
+    map_ctor!(lex_gt, isl_map_lex_gt, space: Space<'a>);
+    map_ctor!(lex_lt_first, isl_map_lex_lt_first, space: Space<'a>, [trivial] first: u32);
+    map_ctor!(lex_le_first, isl_map_lex_le_first, space: Space<'a>, [trivial] first: u32);
+    map_ctor!(lex_ge_first, isl_map_lex_ge_first, space: Space<'a>, [trivial] first: u32);
+    map_ctor!(lex_gt_first, isl_map_lex_gt_first, space: Space<'a>, [trivial] first: u32);
+    map_ctor!(universe, isl_map_universe, space: Space<'a>);
+    map_ctor!(empty, isl_map_empty, space: Space<'a>);
+    map_ctor!(identity, isl_map_identity, space: Space<'a>);
+    map_transform!(reverse, isl_map_reverse);
+    map_transform!(domain_reverse, isl_map_domain_reverse);
 }
 
 #[cfg(test)]
