@@ -1,8 +1,12 @@
 use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::aff::Affine;
+use crate::ident::Ident;
 use crate::local_space::LocalSpace;
+use crate::set::Set;
 use crate::space::Space;
+use crate::stat::isl_bool_to_optional_bool;
+use crate::value::Value;
 use crate::{DimType, constraint::Constraint, impl_isl_handle, stat::isl_size_to_optional_u32};
 
 impl_isl_handle!(Map, map);
@@ -132,7 +136,7 @@ macro_rules! map_ctor {
 
 macro_rules! map_transform {
     (@get_access [trivial] $val:ident) => {
-        $val
+        $val as _
     };
     (@get_access [managed] $val:ident) => {
         $val.handle.as_ptr()
@@ -146,7 +150,7 @@ macro_rules! map_transform {
     ($func:ident, $sys_fn:ident
      $(, [$kind:ident] $name:ident : $ty:ty )* $(,)? ) => {
         pub fn $func(
-            self: Self,
+            self: Self
             $(, $name: $ty )*
         ) -> Result<Self, crate::Error> {
             // pull the ContextRef from the first argument
@@ -176,6 +180,18 @@ macro_rules! map_transform {
     };
 }
 
+macro_rules! map_flag {
+    ($isl_func:ident => $fn_name:ident) => {
+        paste::paste! {
+            pub fn $fn_name(&self) -> Option<bool> {
+                let flag = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()) };
+                isl_bool_to_optional_bool(flag)
+            }
+        }
+    };
+}
+
+#[allow(clippy::should_implement_trait)]
 impl<'a> Map<'a> {
     pub fn domain_tuple_dim(&self) -> Option<u32> {
         let handle = unsafe { barvinok_sys::isl_map_domain_tuple_dim(self.handle.as_ptr()) };
@@ -203,6 +219,88 @@ impl<'a> Map<'a> {
     map_ctor!(identity, isl_map_identity, space: Space<'a>);
     map_transform!(reverse, isl_map_reverse);
     map_transform!(domain_reverse, isl_map_domain_reverse);
+    map_transform!(sum, isl_map_sum, [managed] map: Map<'a>);
+    map_transform!(neg, isl_map_neg);
+    map_transform!(floor_div, isl_map_floordiv_val, [managed] aff: Value<'a>);
+    pub fn equal(&self, other: &Self) -> Option<bool> {
+        let flag =
+            unsafe { barvinok_sys::isl_map_is_equal(self.handle.as_ptr(), other.handle.as_ptr()) };
+        isl_bool_to_optional_bool(flag)
+    }
+    pub fn disjoint(&self, other: &Self) -> Option<bool> {
+        let flag = unsafe {
+            barvinok_sys::isl_map_is_disjoint(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        isl_bool_to_optional_bool(flag)
+    }
+    map_transform!(lexmin, isl_map_lexmin);
+    map_transform!(lexmax, isl_map_lexmax);
+    map_transform!(range_reverse, isl_map_range_reverse);
+    map_transform!(union, isl_map_union, [managed] map: Map<'a>);
+    map_transform!(disjoint_union, isl_map_union_disjoint, [managed] map: Map<'a>);
+    map_transform!(intersect_domain, isl_map_intersect_domain, [managed] set: Set<'a>);
+    map_transform!(intersect_range, isl_map_intersect_range, [managed] set: Set<'a>);
+    map_transform!(intersect_domain_factor_domain, isl_map_intersect_domain_factor_domain, [managed] map: Map<'a>);
+    map_transform!(intersect_range_factor_range, isl_map_intersect_range_factor_range, [managed] map: Map<'a>);
+    map_transform!(intersect_range_factor_domain, isl_map_intersect_range_factor_domain, [managed] map: Map<'a>);
+    map_transform!(intersect_domain_factor_range, isl_map_intersect_domain_factor_range, [managed] map: Map<'a>);
+    map_transform!(intersect_domain_wrapped_domain, isl_map_intersect_domain_wrapped_domain, [managed] set: Set<'a>);
+    map_transform!(intersect_range_wrapped_range, isl_map_intersect_range_wrapped_domain, [managed] set: Set<'a>);
+    map_transform!(apply_domain, isl_map_apply_domain, [managed] map: Map<'a>);
+    map_transform!(apply_range, isl_map_apply_range, [managed] map: Map<'a>);
+    map_transform!(product, isl_map_product, [managed] map: Map<'a>);
+    map_transform!(domain_product, isl_map_domain_product, [managed] map: Map<'a>);
+    map_transform!(range_product, isl_map_range_product, [managed] map: Map<'a>);
+    map_transform!(flat_product, isl_map_flat_product, [managed] map: Map<'a>);
+    map_transform!(flat_domain_product, isl_map_flat_domain_product, [managed] map: Map<'a>);
+    map_transform!(flat_range_product, isl_map_flat_range_product, [managed] map: Map<'a>);
+    map_flag!(map_domain_is_wrapping => domain_is_wrapping);
+    map_flag!(map_range_is_wrapping => range_is_wrapping);
+    map_flag!(map_is_product => is_product);
+    map_transform!(factor_domain, isl_map_factor_domain);
+    map_transform!(factor_range, isl_map_factor_range);
+    map_transform!(domain_factor_domain, isl_map_domain_factor_domain);
+    map_transform!(range_factor_range, isl_map_range_factor_range);
+    map_transform!(domain_factor_range, isl_map_domain_factor_range);
+    map_transform!(range_factor_domain, isl_map_range_factor_domain);
+    map_transform!(intersect, isl_map_intersect, [managed] map: Map<'a>);
+    map_transform!(intersect_params, isl_map_intersect_params, [managed] set: Set<'a>);
+    map_transform!(subtract, isl_map_subtract, [managed] map: Map<'a>);
+    map_transform!(subtract_domain, isl_map_subtract_domain, [managed] set: Set<'a>);
+    map_transform!(subtract_range, isl_map_subtract_range, [managed] set: Set<'a>);
+    map_transform!(complement, isl_map_complement);
+    map_transform!(fix_input_si, isl_map_fix_input_si, [trivial] input: u32, [trivial] value: i32);
+    map_transform!(fix_si, isl_map_fix_si, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
+    map_transform!(fix_val, isl_map_fix_val, [trivial] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
+    map_transform!(lower_bound_si, isl_map_lower_bound_si, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
+    map_transform!(lower_bound_val, isl_map_lower_bound_val, [trivial] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
+    map_transform!(upper_bound_si, isl_map_upper_bound_si, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
+    map_transform!(upper_bound_val, isl_map_upper_bound_val, [trivial] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
+    pub fn deltas(self) -> Result<Set<'a>, crate::Error> {
+        let ctx = self.context_ref();
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_map_deltas(this.handle.as_ptr()) };
+        NonNull::new(handle)
+            .ok_or_else(|| ctx.last_error_or_unknown().into())
+            .map(|handle| Set {
+                handle,
+                marker: std::marker::PhantomData,
+            })
+    }
+    map_transform!(deltas_map, isl_map_deltas_map);
+    map_transform!(detect_equalities, isl_map_detect_equalities);
+    map_transform!(add_dims, isl_map_add_dims, [trivial] dim_type: DimType, [trivial] num: u32);
+    map_transform!(insert_dims, isl_map_insert_dims, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    map_transform!(move_dims, isl_map_move_dims, [trivial] dim_type: DimType, [trivial] dst_type: DimType, [trivial] dst_pos: u32, [trivial] src_pos: u32, [trivial] num: u32);
+    map_transform!(project_out_param_id, isl_map_project_out_param_id, [managed] ident: Ident<'a>);
+    map_transform!(project_out, isl_map_project_out, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    map_transform!(project_out_all_params, isl_map_project_out_all_params);
+    map_transform!(remove_unknown_divs, isl_map_remove_unknown_divs);
+    map_transform!(remove_divs, isl_map_remove_divs);
+    map_transform!(eliminate, isl_map_eliminate, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    map_transform!(remove_dims, isl_map_remove_dims, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    map_transform!(remove_divs_involving_dims, isl_map_remove_divs_involving_dims, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    map_transform!(remove_inputs, isl_map_remove_inputs, [trivial] pos: u32, [trivial] num: u32);
 }
 
 #[cfg(test)]
