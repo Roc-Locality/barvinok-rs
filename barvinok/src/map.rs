@@ -1,6 +1,9 @@
 use std::{mem::ManuallyDrop, ptr::NonNull};
 
-use crate::{constraint::Constraint, impl_isl_handle};
+use crate::aff::Affine;
+use crate::local_space::LocalSpace;
+use crate::space::Space;
+use crate::{DimType, constraint::Constraint, impl_isl_handle, stat::isl_size_to_optional_u32};
 
 impl_isl_handle!(Map, map);
 impl_isl_handle!(BasicMap, basic_map);
@@ -19,6 +22,81 @@ impl<'a> TryFrom<Constraint<'a>> for BasicMap<'a> {
     }
 
     type Error = crate::Error;
+}
+
+macro_rules! map_get_managed {
+    ([keep] $func_name:ident, $ctype:ident, $res_ty:ty) => {
+        paste::paste! {
+            pub fn $func_name(&self) -> Result<$res_ty<'a>, $crate::Error> {
+                let handle = unsafe { barvinok_sys::[<isl_ $ctype _ $func_name>](self.handle.as_ptr()) };
+                NonNull::new(handle)
+                    .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
+                    .map(|handle| {
+                        $res_ty {
+                            handle,
+                            marker: std::marker::PhantomData,
+                        }
+                    })
+            }
+        }
+    };
+    ([take] $func_name:ident, $ctype:ident, $res_ty:ty) => {
+        paste::paste! {
+            pub fn $func_name(self) -> Result<$res_ty<'a>, $crate::Error> {
+                let ctx = self.context_ref();
+                let this = ManuallyDrop::new(self);
+                let handle = unsafe { barvinok_sys::[<isl_ $ctype _ $func_name>](this.handle.as_ptr()) };
+                NonNull::new(handle)
+                    .ok_or_else(|| ctx.last_error_or_unknown().into())
+                    .map(|handle| {
+                        $res_ty {
+                            handle,
+                            marker: std::marker::PhantomData,
+                        }
+                    })
+            }
+        }
+    };
+}
+
+impl<'a> BasicMap<'a> {
+    pub fn total_dims(&self) -> Option<u32> {
+        let handle = unsafe { barvinok_sys::isl_basic_map_total_dim(self.handle.as_ptr()) };
+        isl_size_to_optional_u32(handle)
+    }
+    pub fn dim(&self, dim_type: DimType) -> Option<u32> {
+        let handle =
+            unsafe { barvinok_sys::isl_basic_map_dim(self.handle.as_ptr(), dim_type as u32) };
+        isl_size_to_optional_u32(handle)
+    }
+    map_get_managed!([keep] get_space, basic_map, Space);
+    map_get_managed!([keep] get_local_space, basic_map, LocalSpace);
+    pub fn get_div(&self, pos: u32) -> Result<Affine<'a>, crate::Error> {
+        let handle =
+            unsafe { barvinok_sys::isl_basic_map_get_div(self.handle.as_ptr(), pos as i32) };
+        NonNull::new(handle)
+            .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
+            .map(|handle| Affine {
+                handle,
+                marker: std::marker::PhantomData,
+            })
+    }
+}
+
+impl<'a> Map<'a> {
+    pub fn domain_tuple_dim(&self) -> Option<u32> {
+        let handle = unsafe { barvinok_sys::isl_map_domain_tuple_dim(self.handle.as_ptr()) };
+        isl_size_to_optional_u32(handle)
+    }
+    pub fn range_tuple_dim(&self) -> Option<u32> {
+        let handle = unsafe { barvinok_sys::isl_map_range_tuple_dim(self.handle.as_ptr()) };
+        isl_size_to_optional_u32(handle)
+    }
+    pub fn dim(&self, dim_type: DimType) -> Option<u32> {
+        let handle = unsafe { barvinok_sys::isl_map_dim(self.handle.as_ptr(), dim_type as u32) };
+        isl_size_to_optional_u32(handle)
+    }
+    map_get_managed!([keep] get_space, map, Space);
 }
 
 #[cfg(test)]
