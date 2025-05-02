@@ -83,6 +83,41 @@ impl<'a> BasicMap<'a> {
     }
 }
 
+macro_rules! map_value_ctor {
+    ($func:ident, $sys_fn:ident,
+     $first_name:ident : $first_ty:ty
+     $(, $name:ident : $ty:ty )* $(,)? ) => {
+        pub fn $func(
+            $first_name: $first_ty
+            $(, $name: $ty )*
+        ) -> Result<Self, crate::Error> {
+            // pull the ContextRef from the first argument
+            let ctx = $first_name.context_ref();
+            // consume each arg into ManuallyDrop
+            let $first_name = std::mem::ManuallyDrop::new($first_name);
+            $(
+                let $name = std::mem::ManuallyDrop::new($name);
+            )*
+
+            // call the raw C function
+            let raw = unsafe {
+                barvinok_sys::$sys_fn(
+                    $first_name.handle.as_ptr()
+                    $(, $name.handle.as_ptr() )*
+                )
+            };
+
+            // wrap in NonNull, use saved `ctx` on error
+            NonNull::new(raw)
+                .ok_or_else(|| ctx.last_error_or_unknown().into())
+                .map(|handle| Self {
+                    handle,
+                    marker: std::marker::PhantomData,
+                })
+        }
+    };
+}
+
 impl<'a> Map<'a> {
     pub fn domain_tuple_dim(&self) -> Option<u32> {
         let handle = unsafe { barvinok_sys::isl_map_domain_tuple_dim(self.handle.as_ptr()) };
@@ -97,12 +132,19 @@ impl<'a> Map<'a> {
         isl_size_to_optional_u32(handle)
     }
     map_get_managed!([keep] get_space, map, Space);
+    map_value_ctor!(lex_lt,    isl_map_lex_lt,    space: Space<'a>);
+    map_value_ctor!(lex_le,    isl_map_lex_le,    space: Space<'a>);
+    map_value_ctor!(lex_ge,    isl_map_lex_ge,    space: Space<'a>);
+    map_value_ctor!(lex_gt,    isl_map_lex_gt,    space: Space<'a>);
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        Context, DimType, constraint::Constraint, local_space::LocalSpace, map::BasicMap,
+        Context, DimType,
+        constraint::Constraint,
+        local_space::LocalSpace,
+        map::{BasicMap, Map},
         space::Space,
     };
 
@@ -118,5 +160,16 @@ mod tests {
             let basic_set = BasicMap::try_from(constraint).unwrap();
             println!("Basic Map: {:?}", basic_set);
         });
+    }
+
+    #[test]
+    fn test_lex_lt_on_space() -> anyhow::Result<()> {
+        let context = Context::new();
+        context.scope(|context| {
+            let space = Space::new_set(context, 2, 2);
+            let basic_map = Map::lex_lt(space)?;
+            println!("Lexicographically less than map: {:?}", basic_map);
+            Ok(())
+        })
     }
 }
