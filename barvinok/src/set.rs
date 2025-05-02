@@ -6,7 +6,7 @@ use crate::{
     ident::Ident,
     impl_isl_handle,
     list::List,
-    map::BasicMap,
+    map::{BasicMap, Map},
     nonnull_or_alloc_error,
     polynomial::PiecewiseQuasiPolynomial,
     space::Space,
@@ -16,7 +16,7 @@ use crate::{
 impl_isl_handle!(Set, set);
 impl_isl_handle!(BasicSet, basic_set);
 
-macro_rules! basic_set_constructor {
+macro_rules! set_constructor {
     ($fn_name:ident, $isl_fn:ident) => {
         paste::paste! {
             pub fn [<new_ $fn_name>](space: Space<'a>) -> Result<Self, crate::Error> {
@@ -33,14 +33,14 @@ macro_rules! basic_set_constructor {
     };
 }
 
-macro_rules! basic_set_unary {
-    ($fn_name:ident) => {
+macro_rules! set_unary {
+    ($out:ty, $ctype:ident, $fn_name:ident) => {
         paste::paste! {
-            pub fn $fn_name(self) -> Result<Self, crate::Error> {
+            pub fn $fn_name(self) -> Result<$out<'a>, crate::Error> {
                 let this = ManuallyDrop::new(self);
-                let handle = unsafe { barvinok_sys::[<isl_basic_set_ $fn_name>](this.handle.as_ptr()) };
+                let handle = unsafe { barvinok_sys::[<isl_ $ctype _ $fn_name>](this.handle.as_ptr()) };
                 let handle = nonnull_or_alloc_error(handle);
-                Ok(Self {
+                Ok($out {
                     handle,
                     marker: std::marker::PhantomData,
                 })
@@ -49,14 +49,14 @@ macro_rules! basic_set_unary {
     };
 }
 
-macro_rules! basic_set_binary {
-    ($fn_name:ident) => {
+macro_rules! set_binary {
+    ($isl_func:ident => $fn_name:ident) => {
         paste::paste! {
-            pub fn $fn_name(self, other: BasicSet<'a>) -> Result<Self, crate::Error> {
+            pub fn $fn_name(self, other: Self) -> Result<Self, crate::Error> {
                 let this = ManuallyDrop::new(self);
                 let other = ManuallyDrop::new(other);
                 let handle = unsafe {
-                    barvinok_sys::[<isl_basic_set_ $fn_name>](this.handle.as_ptr(), other.handle.as_ptr())
+                    barvinok_sys::[<isl_ $isl_func>](this.handle.as_ptr(), other.handle.as_ptr())
                 };
                 let handle = nonnull_or_alloc_error(handle);
                 Ok(Self {
@@ -68,11 +68,34 @@ macro_rules! basic_set_binary {
     };
 }
 
+macro_rules! set_flag {
+    ($isl_func:ident => $fn_name:ident) => {
+        paste::paste! {
+            pub fn $fn_name(&self) -> Option<bool> {
+                let flag = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()) };
+                isl_bool_to_optional_bool(flag)
+            }
+        }
+    };
+}
+
+macro_rules! set_dim_query {
+    ($func_name:ident) => {
+        paste::paste! {
+            pub fn $func_name(&self, ty: DimType, pos: u32) -> Option<bool> {
+                let num = unsafe { barvinok_sys::[<isl_set_ $func_name>](self.handle.as_ptr(), ty as u32, pos) };
+                isl_bool_to_optional_bool(num)
+            }
+        }
+    };
+}
+
+#[allow(clippy::should_implement_trait)]
 impl<'a> BasicSet<'a> {
-    basic_set_constructor!(universe, isl_basic_set_universe);
-    basic_set_constructor!(empty, isl_basic_set_empty);
-    basic_set_constructor!(nat_universe, isl_basic_set_nat_universe);
-    basic_set_constructor!(positive_orthant, isl_basic_set_positive_orthant);
+    set_constructor!(universe, isl_basic_set_universe);
+    set_constructor!(empty, isl_basic_set_empty);
+    set_constructor!(nat_universe, isl_basic_set_nat_universe);
+    set_constructor!(positive_orthant, isl_basic_set_positive_orthant);
     pub fn num_dims(&self) -> Option<u32> {
         let num = unsafe { barvinok_sys::isl_basic_set_n_dim(self.handle.as_ptr()) };
         isl_size_to_optional_u32(num)
@@ -89,12 +112,12 @@ impl<'a> BasicSet<'a> {
         let num = unsafe { barvinok_sys::isl_basic_set_dim(self.handle.as_ptr(), ty as u32) };
         isl_size_to_optional_u32(num)
     }
-    basic_set_binary!(intersect);
-    basic_set_binary!(intersect_params);
-    basic_set_unary!(affine_hull);
-    basic_set_unary!(sample);
-    basic_set_unary!(remove_redundancies);
-    basic_set_unary!(detect_equalities);
+    set_binary!(basic_set_intersect => intersect);
+    set_binary!(basic_set_intersect_params => intersect_params);
+    set_unary!(BasicSet, basic_set, affine_hull);
+    set_unary!(BasicSet, basic_set, sample);
+    set_unary!(BasicSet, basic_set, remove_redundancies);
+    set_unary!(BasicSet, basic_set, detect_equalities);
     pub fn cardinality(self) -> Option<PiecewiseQuasiPolynomial<'a>> {
         let this = ManuallyDrop::new(self);
         let handle = unsafe { barvinok_sys::isl_basic_set_card(this.handle.as_ptr()) };
@@ -156,10 +179,7 @@ impl<'a> BasicSet<'a> {
             marker: std::marker::PhantomData,
         })
     }
-    pub fn is_rational(&self) -> Option<bool> {
-        let is_rational = unsafe { barvinok_sys::isl_basic_set_is_rational(self.handle.as_ptr()) };
-        isl_bool_to_optional_bool(is_rational)
-    }
+    set_flag!(basic_set_is_rational => is_rational);
     pub fn lexmin(self) -> Option<Set<'a>> {
         let this = ManuallyDrop::new(self);
         let handle = unsafe { barvinok_sys::isl_basic_set_lexmin(this.handle.as_ptr()) };
@@ -176,9 +196,66 @@ impl<'a> BasicSet<'a> {
             marker: std::marker::PhantomData,
         })
     }
+    pub fn equal(&self, other: &Self) -> Option<bool> {
+        let equal = unsafe {
+            barvinok_sys::isl_basic_set_is_equal(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        isl_bool_to_optional_bool(equal)
+    }
+    pub fn disjoint(&self, other: &Self) -> Option<bool> {
+        let disjoint = unsafe {
+            barvinok_sys::isl_basic_set_is_disjoint(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        isl_bool_to_optional_bool(disjoint)
+    }
+    pub fn union(self, other: BasicSet<'a>) -> Option<Set<'a>> {
+        let this = ManuallyDrop::new(self);
+        let other = ManuallyDrop::new(other);
+        let handle = unsafe {
+            barvinok_sys::isl_basic_set_union(this.handle.as_ptr(), other.handle.as_ptr())
+        };
+        NonNull::new(handle).map(|handle| Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    set_binary!(basic_set_flat_product => flat_product);
+    set_unary!(BasicSet, basic_set, neg);
+    pub fn compute_divs(self) -> Option<Set<'a>> {
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_basic_set_compute_divs(this.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    set_binary!(basic_set_gist => gist);
 }
-
+#[allow(clippy::should_implement_trait)]
 impl<'a> Set<'a> {
+    set_constructor!(empty, isl_set_empty);
+    set_constructor!(universe, isl_set_universe);
+    set_constructor!(space_universe, isl_space_universe_set);
+    set_constructor!(nat_universe, isl_set_nat_universe);
+    set_unary!(Set, set, detect_equalities);
+    set_unary!(BasicSet, set, affine_hull);
+    set_unary!(BasicSet, set, sample);
+    set_unary!(BasicSet, set, convex_hull);
+    set_unary!(BasicSet, set, polyhedral_hull);
+    set_unary!(BasicSet, set, simple_hull);
+    set_unary!(BasicSet, set, unshifted_simple_hull);
+    set_unary!(BasicSet, set, plain_unshifted_simple_hull);
+    set_unary!(BasicSet, set, bounded_simple_hull);
+    set_unary!(Set, set, wrapped_reverse);
+    set_binary!(set_union_disjoint => disjoint_union);
+    set_binary!(set_union => union);
+    set_binary!(set_product => product);
+    set_binary!(set_intersect => intersect);
+    set_binary!(set_intersect_params => intersect_params);
+    set_binary!(set_intersect_factor_domain => intersect_factor_domain);
+    set_binary!(set_intersect_factor_range => intersect_factor_range);
+    set_binary!(set_subtract => subtract);
+    set_unary!(Set, set, complement);
     pub fn num_dims(&self) -> Option<u32> {
         let num = unsafe { barvinok_sys::isl_set_n_dim(self.handle.as_ptr()) };
         isl_size_to_optional_u32(num)
@@ -378,6 +455,131 @@ impl<'a> Set<'a> {
             marker: std::marker::PhantomData,
         })
     }
+    pub fn equal(&self, other: &Self) -> Option<bool> {
+        let equal =
+            unsafe { barvinok_sys::isl_set_is_equal(self.handle.as_ptr(), other.handle.as_ptr()) };
+        isl_bool_to_optional_bool(equal)
+    }
+    pub fn disjoint(&self, other: &Self) -> Option<bool> {
+        let disjoint = unsafe {
+            barvinok_sys::isl_set_is_disjoint(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        isl_bool_to_optional_bool(disjoint)
+    }
+    pub fn plain_equal(&self, other: &Self) -> Option<bool> {
+        let equal = unsafe {
+            barvinok_sys::isl_set_plain_is_equal(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        isl_bool_to_optional_bool(equal)
+    }
+    pub fn plain_disjoint(&self, other: &Self) -> Option<bool> {
+        let disjoint = unsafe {
+            barvinok_sys::isl_set_plain_is_disjoint(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        isl_bool_to_optional_bool(disjoint)
+    }
+    pub fn plain_compare(&self, other: &Self) -> std::cmp::Ordering {
+        let cmp =
+            unsafe { barvinok_sys::isl_set_plain_cmp(self.handle.as_ptr(), other.handle.as_ptr()) };
+        cmp.cmp(&0)
+    }
+    pub fn apply(self, map: Map<'a>) -> Option<Set<'a>> {
+        let this = ManuallyDrop::new(self);
+        let map = ManuallyDrop::new(map);
+        let handle =
+            unsafe { barvinok_sys::isl_set_apply(this.handle.as_ptr(), map.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    set_flag!(set_plain_is_empty => plain_is_empty);
+    set_flag!(set_plain_is_universe => plain_is_universe);
+    set_flag!(set_is_params => is_params);
+    set_flag!(set_is_empty => is_empty);
+    set_flag!(set_is_bounded => is_bounded);
+    set_flag!(set_is_singleton => is_singleton);
+    set_flag!(set_is_box => is_box);
+    pub fn subset(&self, other: &Self) -> Option<bool> {
+        let subset =
+            unsafe { barvinok_sys::isl_set_is_subset(self.handle.as_ptr(), other.handle.as_ptr()) };
+        isl_bool_to_optional_bool(subset)
+    }
+    pub fn strict_subset(&self, other: &Self) -> Option<bool> {
+        let subset = unsafe {
+            barvinok_sys::isl_set_is_strict_subset(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        isl_bool_to_optional_bool(subset)
+    }
+    pub fn has_equal_space(&self, other: &Self) -> Option<bool> {
+        let equal = unsafe {
+            barvinok_sys::isl_set_has_equal_space(self.handle.as_ptr(), other.handle.as_ptr())
+        };
+        isl_bool_to_optional_bool(equal)
+    }
+    set_binary!(set_sum => sum);
+    set_unary!(Set, set, neg);
+    set_unary!(Set, set, make_disjoint);
+    set_unary!(Set, set, compute_divs);
+    set_dim_query!(dim_is_bounded);
+    set_dim_query!(dim_has_lower_bound);
+    set_dim_query!(dim_has_upper_bound);
+    set_dim_query!(dim_has_any_lower_bound);
+    set_dim_query!(dim_has_any_upper_bound);
+    pub fn plain_get_val_if_fixed(
+        &self,
+        ty: DimType,
+        pos: u32,
+    ) -> Result<crate::value::Value<'a>, crate::Error> {
+        let ctx = self.context_ref();
+        let val = unsafe {
+            barvinok_sys::isl_set_plain_get_val_if_fixed(self.handle.as_ptr(), ty as u32, pos)
+        };
+        let handle = NonNull::new(val).ok_or_else(|| ctx.last_error_or_unknown())?;
+        Ok(crate::value::Value {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    set_binary!(set_gist => gist);
+    pub fn gist_basic_set(self, bset: BasicSet<'a>) -> Option<Set<'a>> {
+        let this = ManuallyDrop::new(self);
+        let bset = ManuallyDrop::new(bset);
+        let handle = unsafe {
+            barvinok_sys::isl_set_gist_basic_set(this.handle.as_ptr(), bset.handle.as_ptr())
+        };
+        NonNull::new(handle).map(|handle| Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    set_binary!(set_gist_params => gist_params);
+    set_unary!(Set, set, coalesce);
+    pub fn num_basic_sets(&self) -> Option<u32> {
+        let num = unsafe { barvinok_sys::isl_set_n_basic_set(self.handle.as_ptr()) };
+        isl_size_to_optional_u32(num)
+    }
+    pub fn from_str(ctx: ContextRef<'a>, str: &str) -> Result<Self, crate::Error> {
+        let c_str = std::ffi::CString::new(str)?;
+        let handle = unsafe { barvinok_sys::isl_set_read_from_str(ctx.0.as_ptr(), c_str.as_ptr()) };
+        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+        Ok(Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+}
+
+impl PartialEq for BasicSet<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equal(other).unwrap_or(false)
+    }
+}
+
+impl PartialEq for Set<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equal(other).unwrap_or(false)
+    }
 }
 
 impl<'a> List<'a, BasicSet<'a>> {
@@ -412,6 +614,21 @@ impl<'a> TryFrom<Constraint<'a>> for BasicSet<'a> {
             unsafe { barvinok_sys::isl_basic_set_from_constraint(constraint.handle.as_ptr()) };
         let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
         Ok(BasicSet {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+
+    type Error = crate::Error;
+}
+
+impl<'a> TryFrom<BasicSet<'a>> for Set<'a> {
+    fn try_from(basic_set: BasicSet<'a>) -> Result<Self, crate::Error> {
+        let ctx = basic_set.context_ref();
+        let basic_set = ManuallyDrop::new(basic_set);
+        let handle = unsafe { barvinok_sys::isl_set_from_basic_set(basic_set.handle.as_ptr()) };
+        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+        Ok(Set {
             handle,
             marker: std::marker::PhantomData,
         })
