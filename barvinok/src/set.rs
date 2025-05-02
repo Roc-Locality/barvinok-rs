@@ -160,6 +160,22 @@ impl<'a> BasicSet<'a> {
         let is_rational = unsafe { barvinok_sys::isl_basic_set_is_rational(self.handle.as_ptr()) };
         isl_bool_to_optional_bool(is_rational)
     }
+    pub fn lexmin(self) -> Option<Set<'a>> {
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_basic_set_lexmin(this.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    pub fn lexmax(self) -> Option<Set<'a>> {
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_basic_set_lexmax(this.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
 }
 
 impl<'a> Set<'a> {
@@ -345,6 +361,22 @@ impl<'a> Set<'a> {
         };
         isl_size_to_optional_u32(num)
             .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
+    }
+    pub fn lexmin(self) -> Option<Set<'a>> {
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_set_lexmin(this.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    pub fn lexmax(self) -> Option<Set<'a>> {
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_set_lexmax(this.handle.as_ptr()) };
+        NonNull::new(handle).map(|handle| Set {
+            handle,
+            marker: std::marker::PhantomData,
+        })
     }
 }
 
