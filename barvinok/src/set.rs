@@ -783,7 +783,7 @@ mod test {
         });
     }
     #[test]
-    fn test_construct_triangular_iteration_space() -> Result<(), crate::Error> {
+    fn test_construct_triangular_iteration_space() -> anyhow::Result<()> {
         // for i in 0 .. n
         //     for j in 0 .. i
         //         for k in 0 .. j

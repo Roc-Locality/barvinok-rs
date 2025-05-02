@@ -8,3 +8,6 @@ barvinok-sys = { path = "../barvinok-sys" }
 num-traits = "0.2.19"
 paste = "1.0.15"
 thiserror = "2.0.12"
+
+[dev-dependencies]
+anyhow = { version = "1.0.98", features = ["backtrace"] }
