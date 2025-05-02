@@ -90,6 +90,84 @@ macro_rules! set_dim_query {
     };
 }
 
+macro_rules! set_named_id_methods {
+    ($Wrapper:ident, $ctype:ident) => {
+        paste::paste! {
+            impl<'a> $Wrapper<'a> {
+                pub fn get_tuple_name(&self) -> Result<&str, crate::Error> {
+                    let ctx = self.context_ref();
+                    let ptr = unsafe { barvinok_sys::[<isl_ $ctype _get_tuple_name>](self.handle.as_ptr()) };
+                    if ptr.is_null() {
+                        return Err(ctx.last_error_or_unknown().into());
+                    }
+                    let cstr = unsafe { std::ffi::CStr::from_ptr(ptr) };
+                    Ok(cstr.to_str()?)
+                }
+
+                pub fn set_tuple_name(self, name: &str) -> Result<Self, crate::Error> {
+                    let ctx = self.context_ref();
+                    let this = std::mem::ManuallyDrop::new(self);
+                    let c_name = std::ffi::CString::new(name)?;
+                    let handle = unsafe {
+                        barvinok_sys::[<isl_ $ctype _set_tuple_name>](this.handle.as_ptr(), c_name.as_ptr())
+                    };
+                    let handle = std::ptr::NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+                    Ok($Wrapper { handle, marker: std::marker::PhantomData })
+                }
+
+                pub fn get_dim_name(&self, ty: DimType, pos: u32) -> Result<&str, crate::Error> {
+                    let ctx = self.context_ref();
+                    let ptr = unsafe {
+                        barvinok_sys::[<isl_ $ctype _get_dim_name>](self.handle.as_ptr(), ty as u32, pos)
+                    };
+                    if ptr.is_null() {
+                        return Err(ctx.last_error_or_unknown().into());
+                    }
+                    let cstr = unsafe { std::ffi::CStr::from_ptr(ptr) };
+                    Ok(cstr.to_str()?)
+                }
+
+                pub fn set_dim_name(self, ty: DimType, pos: u32, name: &str) -> Result<Self, crate::Error> {
+                    let ctx = self.context_ref();
+                    let this = std::mem::ManuallyDrop::new(self);
+                    let c_name = std::ffi::CString::new(name)?;
+                    let handle = unsafe {
+                        barvinok_sys::[<isl_ $ctype _set_dim_name>](this.handle.as_ptr(), ty as u32, pos, c_name.as_ptr())
+                    };
+                    let handle = std::ptr::NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+                    Ok($Wrapper { handle, marker: std::marker::PhantomData })
+                }
+
+                pub fn get_dim_id(&self, ty: DimType, pos: u32) -> Result<Ident<'a>, crate::Error> {
+                    let ctx = self.context_ref();
+                    let id_ptr = unsafe {
+                        barvinok_sys::[<isl_ $ctype _get_dim_id>](self.handle.as_ptr(), ty as u32, pos)
+                    };
+                    if id_ptr.is_null() {
+                        return Err(ctx.last_error_or_unknown().into());
+                    }
+                    let handle = std::ptr::NonNull::new(id_ptr).ok_or_else(|| ctx.last_error_or_unknown())?;
+                    Ok(Ident { handle, marker: std::marker::PhantomData })
+                }
+
+                pub fn set_tuple_id(self, id: Ident<'a>) -> Result<Self, crate::Error> {
+                    let ctx = self.context_ref();
+                    let this = std::mem::ManuallyDrop::new(self);
+                    let id = std::mem::ManuallyDrop::new(id);
+                    let handle = unsafe {
+                        barvinok_sys::[<isl_ $ctype _set_tuple_id>](this.handle.as_ptr(), id.handle.as_ptr())
+                    };
+                    let handle = std::ptr::NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+                    Ok($Wrapper { handle, marker: std::marker::PhantomData })
+                }
+            }
+        }
+    };
+}
+
+set_named_id_methods!(BasicSet, basic_set);
+set_named_id_methods!(Set, set);
+
 #[allow(clippy::should_implement_trait)]
 impl<'a> BasicSet<'a> {
     set_constructor!(universe, isl_basic_set_universe);
@@ -293,70 +371,14 @@ impl<'a> Set<'a> {
         let has = unsafe { barvinok_sys::isl_set_has_tuple_name(self.handle.as_ptr()) };
         isl_bool_to_optional_bool(has)
     }
-    pub fn get_tuple_name(&self) -> Result<&str, crate::Error> {
-        let ctx = self.context_ref();
-        let name = unsafe { barvinok_sys::isl_set_get_tuple_name(self.handle.as_ptr()) };
-        if name.is_null() {
-            return Err(ctx.last_error_or_unknown().into());
-        }
-        let c_str = unsafe { std::ffi::CStr::from_ptr(name) };
-        Ok(c_str.to_str()?)
-    }
-    pub fn set_tuple_name(self, name: &str) -> Result<Self, crate::Error> {
-        let ctx = self.context_ref();
-        let this = ManuallyDrop::new(self);
-        let c_str = std::ffi::CString::new(name)?;
-        let handle =
-            unsafe { barvinok_sys::isl_set_set_tuple_name(this.handle.as_ptr(), c_str.as_ptr()) };
-        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
-        Ok(Set {
-            handle,
-            marker: std::marker::PhantomData,
-        })
-    }
     pub fn has_dim_name(&self, ty: DimType, pos: u32) -> Option<bool> {
         let has =
             unsafe { barvinok_sys::isl_set_has_dim_name(self.handle.as_ptr(), ty as u32, pos) };
         isl_bool_to_optional_bool(has)
     }
-    pub fn get_dim_name(&self, ty: DimType, pos: u32) -> Result<&str, crate::Error> {
-        let ctx = self.context_ref();
-        let name =
-            unsafe { barvinok_sys::isl_set_get_dim_name(self.handle.as_ptr(), ty as u32, pos) };
-        if name.is_null() {
-            return Err(ctx.last_error_or_unknown().into());
-        }
-        let c_str = unsafe { std::ffi::CStr::from_ptr(name) };
-        Ok(c_str.to_str()?)
-    }
-    pub fn set_dim_name(self, ty: DimType, pos: u32, name: &str) -> Result<Self, crate::Error> {
-        let ctx = self.context_ref();
-        let this = ManuallyDrop::new(self);
-        let c_str = std::ffi::CString::new(name)?;
-        let handle = unsafe {
-            barvinok_sys::isl_set_set_dim_name(this.handle.as_ptr(), ty as u32, pos, c_str.as_ptr())
-        };
-        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
-        Ok(Set {
-            handle,
-            marker: std::marker::PhantomData,
-        })
-    }
     pub fn has_dim_id(&self, ty: DimType, pos: u32) -> Option<bool> {
         let has = unsafe { barvinok_sys::isl_set_has_dim_id(self.handle.as_ptr(), ty as u32, pos) };
         isl_bool_to_optional_bool(has)
-    }
-    pub fn get_dim_id(&self, ty: DimType, pos: u32) -> Result<Ident<'a>, crate::Error> {
-        let ctx = self.context_ref();
-        let id = unsafe { barvinok_sys::isl_set_get_dim_id(self.handle.as_ptr(), ty as u32, pos) };
-        if id.is_null() {
-            return Err(ctx.last_error_or_unknown().into());
-        }
-        let handle = NonNull::new(id).ok_or_else(|| ctx.last_error_or_unknown())?;
-        Ok(Ident {
-            handle,
-            marker: std::marker::PhantomData,
-        })
     }
     pub fn set_dim_id(self, ty: DimType, pos: u32, id: Ident<'a>) -> Result<Self, crate::Error> {
         let ctx = self.context_ref();
@@ -388,18 +410,6 @@ impl<'a> Set<'a> {
         }
         let handle = NonNull::new(id).ok_or_else(|| ctx.last_error_or_unknown())?;
         Ok(Ident {
-            handle,
-            marker: std::marker::PhantomData,
-        })
-    }
-    pub fn set_tuple_id(self, id: Ident<'a>) -> Result<Self, crate::Error> {
-        let ctx = self.context_ref();
-        let this = ManuallyDrop::new(self);
-        let id = ManuallyDrop::new(id);
-        let handle =
-            unsafe { barvinok_sys::isl_set_set_tuple_id(this.handle.as_ptr(), id.handle.as_ptr()) };
-        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
-        Ok(Set {
             handle,
             marker: std::marker::PhantomData,
         })
@@ -567,6 +577,20 @@ impl<'a> Set<'a> {
             handle,
             marker: std::marker::PhantomData,
         })
+    }
+    pub fn add_constraint(self, constraint: Constraint<'a>) -> Result<Self, crate::Error> {
+        let ctx = self.context_ref();
+        let this = ManuallyDrop::new(self);
+        let constraint = ManuallyDrop::new(constraint);
+        let handle = unsafe {
+            barvinok_sys::isl_set_add_constraint(this.handle.as_ptr(), constraint.handle.as_ptr())
+        };
+        NonNull::new(handle)
+            .map(|handle| Set {
+                handle,
+                marker: std::marker::PhantomData,
+            })
+            .ok_or_else(|| ctx.last_error_or_unknown().into())
     }
 }
 
@@ -746,5 +770,50 @@ mod test {
             let intersected_set = list.intersect();
             println!("{:?}", intersected_set);
         });
+    }
+    #[test]
+    fn test_construct_triangular_iteration_space() -> Result<(), crate::Error> {
+        // for i in 0 .. n
+        //     for j in 0 .. i
+        //         for k in 0 .. j
+        let ctx = Context::new();
+        ctx.scope(|ctx| {
+            let space = Space::new_set(ctx, 1, 3);
+            let local_space = LocalSpace::from(space.clone());
+            let i_ge_0 = Constraint::new_inequality(local_space.clone())
+                .set_coefficient_si(DimType::Out, 0, 1)?
+                .set_constant_si(0)?;
+            let i_lt_n = Constraint::new_inequality(local_space.clone())
+                .set_coefficient_si(DimType::Param, 0, 1)?
+                .set_coefficient_si(DimType::Out, 0, -1)?
+                .set_constant_si(-1)?;
+            let j_ge_0 = Constraint::new_inequality(local_space.clone())
+                .set_coefficient_si(DimType::Out, 1, 1)?
+                .set_constant_si(0)?;
+            let j_lt_i = Constraint::new_inequality(local_space.clone())
+                .set_coefficient_si(DimType::Out, 0, 1)?
+                .set_coefficient_si(DimType::Out, 1, -1)?
+                .set_constant_si(-1)?;
+            let k_ge_0 = Constraint::new_inequality(local_space.clone())
+                .set_coefficient_si(DimType::Out, 2, 1)?
+                .set_constant_si(0)?;
+            let k_lt_j = Constraint::new_inequality(local_space.clone())
+                .set_coefficient_si(DimType::Out, 1, 1)?
+                .set_coefficient_si(DimType::Out, 2, -1)?
+                .set_constant_si(-1)?;
+            let set = Set::new_universe(space.clone())?
+                .add_constraint(i_ge_0)?
+                .add_constraint(i_lt_n)?
+                .add_constraint(j_ge_0)?
+                .add_constraint(j_lt_i)?
+                .add_constraint(k_ge_0)?
+                .add_constraint(k_lt_j)?
+                .set_dim_name(DimType::Param, 0, "n")?
+                .set_dim_name(DimType::Out, 0, "i")?
+                .set_dim_name(DimType::Out, 1, "j")?
+                .set_dim_name(DimType::Out, 2, "k")?;
+            println!("iteration space {:?}", set);
+            Ok(())
+        })
     }
 }
