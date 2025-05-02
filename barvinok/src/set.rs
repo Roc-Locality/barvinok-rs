@@ -196,11 +196,12 @@ impl<'a> BasicSet<'a> {
     set_unary!(BasicSet, basic_set, sample);
     set_unary!(BasicSet, basic_set, remove_redundancies);
     set_unary!(BasicSet, basic_set, detect_equalities);
-    pub fn cardinality(self) -> Option<PiecewiseQuasiPolynomial<'a>> {
+    pub fn cardinality(self) -> Result<PiecewiseQuasiPolynomial<'a>, crate::Error> {
         let this = ManuallyDrop::new(self);
         let handle = unsafe { barvinok_sys::isl_basic_set_card(this.handle.as_ptr()) };
-        let handle = NonNull::new(handle)?;
-        Some(PiecewiseQuasiPolynomial {
+        let handle =
+            NonNull::new(handle).ok_or_else(|| this.context_ref().last_error_or_unknown())?;
+        Ok(PiecewiseQuasiPolynomial {
             handle,
             marker: std::marker::PhantomData,
         })
@@ -592,6 +593,16 @@ impl<'a> Set<'a> {
             })
             .ok_or_else(|| ctx.last_error_or_unknown().into())
     }
+    pub fn cardinality(self) -> Result<PiecewiseQuasiPolynomial<'a>, crate::Error> {
+        let this = ManuallyDrop::new(self);
+        let handle = unsafe { barvinok_sys::isl_set_card(this.handle.as_ptr()) };
+        let handle =
+            NonNull::new(handle).ok_or_else(|| this.context_ref().last_error_or_unknown())?;
+        Ok(PiecewiseQuasiPolynomial {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
 }
 
 impl PartialEq for BasicSet<'_> {
@@ -813,6 +824,8 @@ mod test {
                 .set_dim_name(DimType::Out, 1, "j")?
                 .set_dim_name(DimType::Out, 2, "k")?;
             println!("iteration space {:?}", set);
+            let card = set.cardinality()?;
+            println!("cardinality {:?}", card);
             Ok(())
         })
     }
