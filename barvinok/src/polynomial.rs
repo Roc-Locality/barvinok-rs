@@ -1,5 +1,5 @@
 use crate::{
-    impl_isl_handle,
+    impl_isl_handle, isl_project, isl_size,
     stat::{isl_bool_to_optional_bool, isl_size_to_optional_u32},
     value::Value,
 };
@@ -278,23 +278,9 @@ impl<'a> PiecewiseQuasiPolynomial<'a> {
 }
 
 impl<'a> Term<'a> {
-    pub fn dim(&self, dim: DimType) -> Option<u32> {
-        let dim = dim as barvinok_sys::isl_dim_type;
-        isl_size_to_optional_u32(unsafe { barvinok_sys::isl_term_dim(self.handle.as_ptr(), dim) })
-    }
-    pub fn exponent(&self, dim: DimType, pos: u32) -> Option<u32> {
-        let dim = dim as barvinok_sys::isl_dim_type;
-        isl_size_to_optional_u32(unsafe {
-            barvinok_sys::isl_term_get_exp(self.handle.as_ptr(), dim, pos)
-        })
-    }
-    pub fn coefficient(&self) -> Option<Value<'a>> {
-        let handle = unsafe { barvinok_sys::isl_term_get_coefficient_val(self.handle.as_ptr()) };
-        NonNull::new(handle).map(|handle| Value {
-            handle,
-            marker: std::marker::PhantomData,
-        })
-    }
+    isl_size!(term_dim => dim, [trivial] dim_type: DimType);
+    isl_size!(term_get_exp => exponent, [trivial] dim_type: DimType, [trivial] pos: u32);
+    isl_project!([into(Value)] coefficient, isl_term_get_coefficient_val);
 }
 
 impl<'a> From<Term<'a>> for QuasiPolynomial<'a> {
