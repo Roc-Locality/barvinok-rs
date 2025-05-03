@@ -241,3 +241,198 @@ macro_rules! impl_isl_handle {
 }
 
 pub(crate) use impl_isl_handle;
+
+macro_rules! isl_macro_impl {
+    (@get_access [trivial] $val:ident) => {
+        $val
+    };
+    (@get_access [managed] $val:ident) => {
+        $val.handle.as_ptr()
+    };
+    (@get_access [ref] $val:ident) => {
+        $val.handle.as_ptr()
+    };
+    (@get_access [cast($target:ty)] $val:ident) => {
+        $val as $target
+    };
+
+    (@take [trivial] $val:ident) => {
+        $val
+    };
+    (@take [managed] $val:ident) => {
+        ManuallyDrop::new($val)
+    };
+    (@take [ref] $val:ident) => {
+        $val
+    };
+    (@take [cast($target:ty)] $val:ident) => {
+        $val as $target
+    };
+}
+
+macro_rules! isl_ctor {
+    ($func:ident, $sys_fn:ident,
+     $first_name:ident : $first_ty:ty
+     $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
+        pub fn $func(
+            $first_name: $first_ty
+            $(, $name: $ty )*
+        ) -> Result<Self, crate::Error> {
+            // pull the ContextRef from the first argument
+            let ctx = $first_name.context_ref();
+            // consume each arg into ManuallyDrop
+            let $first_name = std::mem::ManuallyDrop::new($first_name);
+            $(
+                let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
+            )*
+
+            // call the raw C function
+            let raw = unsafe {
+                barvinok_sys::$sys_fn(
+                    $first_name.handle.as_ptr()
+                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) )*
+                )
+            };
+
+            // wrap in NonNull, use saved `ctx` on error
+            NonNull::new(raw)
+                .ok_or_else(|| ctx.last_error_or_unknown().into())
+                .map(|handle| Self {
+                    handle,
+                    marker: std::marker::PhantomData,
+                })
+        }
+    };
+}
+
+macro_rules! isl_transform {
+    ($func:ident, $sys_fn:ident
+     $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
+        pub fn $func(
+            self: Self
+            $(, $name: $ty )*
+        ) -> Result<Self, crate::Error> {
+            // pull the ContextRef from the first argument
+            let ctx = self.context_ref();
+            // consume each arg into ManuallyDrop
+            let this = std::mem::ManuallyDrop::new(self);
+            $(
+                let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
+            )*
+
+            // call the raw C function
+            let raw = unsafe {
+                barvinok_sys::$sys_fn(
+                    this.handle.as_ptr()
+                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) as _ )*
+                )
+            };
+
+            // wrap in NonNull, use saved `ctx` on error
+            NonNull::new(raw)
+                .ok_or_else(|| ctx.last_error_or_unknown().into())
+                .map(|handle| Self {
+                    handle,
+                    marker: std::marker::PhantomData,
+                })
+        }
+    };
+    ([into ($target:ident)]  $func:ident, $sys_fn:ident
+     $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
+        pub fn $func(
+            self: Self
+            $(, $name: $ty )*
+        ) -> Result<$target<'a>, crate::Error> {
+            // pull the ContextRef from the first argument
+            let ctx = self.context_ref();
+            // consume each arg into ManuallyDrop
+            let this = std::mem::ManuallyDrop::new(self);
+            $(
+                let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
+            )*
+
+            // call the raw C function
+            let raw = unsafe {
+                barvinok_sys::$sys_fn(
+                    this.handle.as_ptr()
+                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) )*
+                )
+            };
+
+            // wrap in NonNull, use saved `ctx` on error
+            NonNull::new(raw)
+                .ok_or_else(|| ctx.last_error_or_unknown().into())
+                .map(|handle| $target {
+                    handle,
+                    marker: std::marker::PhantomData,
+                })
+        }
+    };
+}
+
+macro_rules! isl_project {
+    ([into ($target:ident)]  $func:ident, $sys_fn:ident
+     $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
+        pub fn $func(
+            &self
+            $(, $name: $ty )*
+        ) -> Result<$target<'a>, crate::Error> {
+            $(
+                let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
+            )*
+            // call the raw C function
+            let raw = unsafe {
+                barvinok_sys::$sys_fn(
+                    self.handle.as_ptr()
+                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) )*
+                )
+            };
+            // wrap in NonNull, use saved `ctx` on error
+            NonNull::new(raw)
+                .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
+                .map(|handle| $target {
+                    handle,
+                    marker: std::marker::PhantomData,
+                })
+        }
+    };
+}
+
+macro_rules! isl_flag {
+    ($isl_func:ident => $fn_name:ident $(, [$kind:ident] $name:ident : $ty:ty )* $(,)?) => {
+        paste::paste! {
+            pub fn $fn_name(&self $(, $name: $ty )*) -> Result<bool, $crate::Error> {
+                $(
+                    let $name = $crate::isl_macro_impl!(@take [$kind] $name);
+                )*
+                let flag = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
+                    $(, $crate::isl_macro_impl!(@get_access [$kind] $name) as _)*) };
+                isl_bool_to_optional_bool(flag)
+                    .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
+            }
+        }
+    };
+}
+
+macro_rules! isl_size {
+    ($isl_func:ident => $fn_name:ident $(, [$kind:ident] $name:ident : $ty:ty )* $(,)?) => {
+        paste::paste! {
+            pub fn $fn_name(&self $(, $name: $ty )*) -> Result<u32, $crate::Error> {
+                $(
+                    let $name = $crate::isl_macro_impl!(@take [$kind] $name);
+                )*
+                let size = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
+                    $(, $crate::isl_macro_impl!(@get_access [$kind] $name) as _ )*) };
+                isl_size_to_optional_u32(size)
+                    .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
+            }
+        }
+    };
+}
+
+pub(crate) use isl_ctor;
+pub(crate) use isl_flag;
+pub(crate) use isl_macro_impl;
+pub(crate) use isl_project;
+pub(crate) use isl_size;
+pub(crate) use isl_transform;
