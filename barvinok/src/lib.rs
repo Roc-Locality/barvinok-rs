@@ -255,6 +255,9 @@ macro_rules! isl_macro_impl {
     (@get_access [cast($target:ty)] $val:ident) => {
         $val as $target
     };
+    (@get_access [str] $val:ident) => {
+        $val.as_ptr()
+    };
 
     (@take [trivial] $val:ident) => {
         $val
@@ -267,6 +270,9 @@ macro_rules! isl_macro_impl {
     };
     (@take [cast($target:ty)] $val:ident) => {
         $val as $target
+    };
+    (@take [str] $val:ident) => {
+        std::ffi::CString::new($val)?
     };
 }
 
@@ -324,7 +330,7 @@ macro_rules! isl_transform {
             let raw = unsafe {
                 barvinok_sys::$sys_fn(
                     this.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) as _ )*
+                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name))*
                 )
             };
 
@@ -406,7 +412,7 @@ macro_rules! isl_flag {
                     let $name = $crate::isl_macro_impl!(@take [$kind] $name);
                 )*
                 let flag = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind] $name) as _)*) };
+                    $(, $crate::isl_macro_impl!(@get_access [$kind] $name))*) };
                 isl_bool_to_optional_bool(flag)
                     .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
             }
@@ -414,15 +420,34 @@ macro_rules! isl_flag {
     };
 }
 
+macro_rules! isl_str {
+    ($isl_func:ident => $fn_name:ident $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)?) => {
+        paste::paste! {
+            pub fn $fn_name(&self $(, $name: $ty )*) -> Result<&str, $crate::Error> {
+                $(
+                    let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
+                )*
+                let ptr = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
+                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name))*) };
+                if ptr.is_null() {
+                    return Err(self.context_ref().last_error_or_unknown().into());
+                }
+                let cstr = unsafe { std::ffi::CStr::from_ptr(ptr) };
+                Ok(cstr.to_str()?)
+            }
+        }
+    };
+}
+
 macro_rules! isl_size {
-    ($isl_func:ident => $fn_name:ident $(, [$kind:ident] $name:ident : $ty:ty )* $(,)?) => {
+    ($isl_func:ident => $fn_name:ident $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)?) => {
         paste::paste! {
             pub fn $fn_name(&self $(, $name: $ty )*) -> Result<u32, $crate::Error> {
                 $(
-                    let $name = $crate::isl_macro_impl!(@take [$kind] $name);
+                    let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
                 )*
                 let size = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind] $name) as _ )*) };
+                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name))*) };
                 isl_size_to_optional_u32(size)
                     .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
             }
@@ -435,4 +460,5 @@ pub(crate) use isl_flag;
 pub(crate) use isl_macro_impl;
 pub(crate) use isl_project;
 pub(crate) use isl_size;
+pub(crate) use isl_str;
 pub(crate) use isl_transform;

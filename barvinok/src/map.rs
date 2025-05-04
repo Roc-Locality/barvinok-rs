@@ -31,7 +31,7 @@ impl<'a> TryFrom<Constraint<'a>> for BasicMap<'a> {
 
 impl<'a> BasicMap<'a> {
     isl_size!(basic_map_total_dim => total_dim);
-    isl_size!(basic_map_dim => dim, [trivial] dim_type: DimType);
+    isl_size!(basic_map_dim => dim, [cast(u32)] dim_type: DimType);
     isl_project!([into(Space)] get_space, isl_basic_map_get_space);
     isl_project!([into(LocalSpace)] get_local_space, isl_basic_map_get_local_space);
     isl_project!([into(Affine)] get_div, isl_basic_map_get_div, [cast(i32)] pos: u32);
@@ -41,7 +41,7 @@ impl<'a> BasicMap<'a> {
 impl<'a> Map<'a> {
     isl_size!(map_domain_tuple_dim => domain_tuple_dim);
     isl_size!(map_range_tuple_dim => range_tuple_dim);
-    isl_size!(map_dim => dim, [trivial] dim_type: DimType);
+    isl_size!(map_dim => dim, [cast(u32)] dim_type: DimType);
     isl_project!([into(Space)] get_space, isl_map_get_space);
     isl_ctor!(lex_lt, isl_map_lex_lt, space: Space<'a>);
     isl_ctor!(lex_le, isl_map_lex_le, space: Space<'a>);
@@ -98,26 +98,26 @@ impl<'a> Map<'a> {
     isl_transform!(subtract_range, isl_map_subtract_range, [managed] set: Set<'a>);
     isl_transform!(complement, isl_map_complement);
     isl_transform!(fix_input_si, isl_map_fix_input_si, [trivial] input: u32, [trivial] value: i32);
-    isl_transform!(fix_si, isl_map_fix_si, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
-    isl_transform!(fix_val, isl_map_fix_val, [trivial] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
-    isl_transform!(lower_bound_si, isl_map_lower_bound_si, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
-    isl_transform!(lower_bound_val, isl_map_lower_bound_val, [trivial] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
-    isl_transform!(upper_bound_si, isl_map_upper_bound_si, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
-    isl_transform!(upper_bound_val, isl_map_upper_bound_val, [trivial] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
+    isl_transform!(fix_si, isl_map_fix_si, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
+    isl_transform!(fix_val, isl_map_fix_val, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
+    isl_transform!(lower_bound_si, isl_map_lower_bound_si, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
+    isl_transform!(lower_bound_val, isl_map_lower_bound_val, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
+    isl_transform!(upper_bound_si, isl_map_upper_bound_si, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] value: i32);
+    isl_transform!(upper_bound_val, isl_map_upper_bound_val, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
     isl_transform!([into(Set)] deltas, isl_map_deltas);
     isl_transform!(deltas_map, isl_map_deltas_map);
     isl_transform!(detect_equalities, isl_map_detect_equalities);
-    isl_transform!(add_dims, isl_map_add_dims, [trivial] dim_type: DimType, [trivial] num: u32);
-    isl_transform!(insert_dims, isl_map_insert_dims, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
-    isl_transform!(move_dims, isl_map_move_dims, [trivial] dim_type: DimType, [trivial] dst_type: DimType, [trivial] dst_pos: u32, [trivial] src_pos: u32, [trivial] num: u32);
+    isl_transform!(add_dims, isl_map_add_dims, [cast(u32)] dim_type: DimType, [trivial] num: u32);
+    isl_transform!(insert_dims, isl_map_insert_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(move_dims, isl_map_move_dims, [cast(u32)] dim_type: DimType, [cast(u32)] dst_type: DimType, [trivial] dst_pos: u32, [trivial] src_pos: u32, [trivial] num: u32);
     isl_transform!(project_out_param_id, isl_map_project_out_param_id, [managed] ident: Ident<'a>);
-    isl_transform!(project_out, isl_map_project_out, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(project_out, isl_map_project_out, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
     isl_transform!(project_out_all_params, isl_map_project_out_all_params);
     isl_transform!(remove_unknown_divs, isl_map_remove_unknown_divs);
     isl_transform!(remove_divs, isl_map_remove_divs);
-    isl_transform!(eliminate, isl_map_eliminate, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
-    isl_transform!(remove_dims, isl_map_remove_dims, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
-    isl_transform!(remove_divs_involving_dims, isl_map_remove_divs_involving_dims, [trivial] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(eliminate, isl_map_eliminate, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(remove_dims, isl_map_remove_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(remove_divs_involving_dims, isl_map_remove_divs_involving_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
     isl_transform!(remove_inputs, isl_map_remove_inputs, [trivial] pos: u32, [trivial] num: u32);
 }
 
