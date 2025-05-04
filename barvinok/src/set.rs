@@ -4,7 +4,7 @@ use crate::{
     ContextRef, DimType,
     constraint::Constraint,
     ident::Ident,
-    impl_isl_handle,
+    impl_isl_handle, isl_project,
     list::List,
     map::{BasicMap, Map},
     nonnull_or_alloc_error,
@@ -351,13 +351,7 @@ impl<'a> Set<'a> {
         let num = unsafe { barvinok_sys::isl_set_dim(self.handle.as_ptr(), ty as u32) };
         isl_size_to_optional_u32(num)
     }
-    pub fn space(&self) -> Option<Space<'a>> {
-        let handle = unsafe { barvinok_sys::isl_set_get_space(self.handle.as_ptr()) };
-        NonNull::new(handle).map(|handle| Space {
-            handle,
-            marker: std::marker::PhantomData,
-        })
-    }
+    isl_project!([into(Space)] get_space, isl_set_get_space);
     pub fn reset_space(self, space: Space<'a>) -> Option<Self> {
         let this = ManuallyDrop::new(self);
         let handle = unsafe {

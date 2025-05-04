@@ -3,6 +3,7 @@ use std::{mem::ManuallyDrop, ptr::NonNull};
 use crate::aff::Affine;
 use crate::ident::Ident;
 use crate::local_space::LocalSpace;
+use crate::polynomial::PiecewiseQuasiPolynomial;
 use crate::set::Set;
 use crate::space::Space;
 use crate::stat::isl_bool_to_optional_bool;
@@ -21,6 +22,21 @@ impl<'a> TryFrom<Constraint<'a>> for BasicMap<'a> {
             unsafe { barvinok_sys::isl_basic_map_from_constraint(constraint.handle.as_ptr()) };
         let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
         Ok(BasicMap {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+
+    type Error = crate::Error;
+}
+
+impl<'a> TryFrom<Affine<'a>> for Map<'a> {
+    fn try_from(aff: Affine<'a>) -> Result<Self, Self::Error> {
+        let ctx = aff.context_ref();
+        let aff = ManuallyDrop::new(aff);
+        let handle = unsafe { barvinok_sys::isl_map_from_aff(aff.handle.as_ptr()) };
+        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+        Ok(Map {
             handle,
             marker: std::marker::PhantomData,
         })
@@ -119,6 +135,8 @@ impl<'a> Map<'a> {
     isl_transform!(remove_dims, isl_map_remove_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
     isl_transform!(remove_divs_involving_dims, isl_map_remove_divs_involving_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
     isl_transform!(remove_inputs, isl_map_remove_inputs, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(set_tuple_id, isl_map_set_tuple_id, [cast(u32)] dim_type: DimType, [managed] id: Ident<'a>);
+    isl_transform!([into(PiecewiseQuasiPolynomial)] cardinality, isl_map_card);
 }
 
 #[cfg(test)]
