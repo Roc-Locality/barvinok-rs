@@ -405,14 +405,14 @@ macro_rules! isl_project {
 }
 
 macro_rules! isl_flag {
-    ($isl_func:ident => $fn_name:ident $(, [$kind:ident] $name:ident : $ty:ty )* $(,)?) => {
+    ($isl_func:ident => $fn_name:ident $(, [$kind:ident $(($param:ty))?]$name:ident : $ty:ty )* $(,)?) => {
         paste::paste! {
             pub fn $fn_name(&self $(, $name: $ty )*) -> Result<bool, $crate::Error> {
                 $(
-                    let $name = $crate::isl_macro_impl!(@take [$kind] $name);
+                    let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
                 )*
                 let flag = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind] $name))*) };
+                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name))*) };
                 isl_bool_to_optional_bool(flag)
                     .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
             }

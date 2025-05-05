@@ -1,10 +1,14 @@
-use crate::{
-    impl_isl_handle, isl_flag, isl_project, isl_size, isl_transform, stat::{isl_bool_to_optional_bool, isl_size_to_optional_u32}, value::Value
-};
-use std::{cell::Cell, ptr::NonNull};
 use crate::isl_ctor;
 use crate::{DimType, space::Space};
+use crate::{
+    ident::Ident,
+    impl_isl_handle, isl_flag, isl_project, isl_size, isl_transform,
+    set::Set,
+    stat::{isl_bool_to_optional_bool, isl_size_to_optional_u32},
+    value::Value,
+};
 use std::mem::ManuallyDrop;
+use std::{cell::Cell, ptr::NonNull};
 
 impl_isl_handle!(QuasiPolynomial, qpolynomial);
 impl_isl_handle!([noprint] Term, term);
@@ -118,6 +122,17 @@ impl<'a> PiecewiseQuasiPolynomial<'a> {
     isl_flag!(pw_qpolynomial_involves_nan => involves_nan);
     isl_flag!(pw_qpolynomial_plain_is_equal => plain_is_equal, [ref] other: &PiecewiseQuasiPolynomial<'a>);
     isl_ctor!(zero, isl_pw_qpolynomial_zero, space: Space<'a>);
+    isl_flag!(pw_qpolynomial_is_zero => is_zero);
+    isl_project!([into(Space)] get_domain_space, isl_pw_qpolynomial_get_domain_space);
+    isl_transform!(reset_domain_space, isl_pw_qpolynomial_reset_domain_space, [managed] space: Space<'a>);
+    isl_size!(pw_qpolynomial_dim => dim, [cast(u32)] dim_type: DimType);
+    isl_flag!(pw_qpolynomial_involves_param_id => involves_param_id, [ref] id: Ident<'a>);
+    isl_flag!(pw_qpolynomial_involves_dims => involves_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_flag!(pw_qpolynomial_has_equal_space => has_equal_space, [ref] other: &PiecewiseQuasiPolynomial<'a>);
+    isl_transform!(set_dim_name, isl_pw_qpolynomial_set_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [str] name: &str);
+    isl_size!(pw_qpolynomial_find_dim_by_name => find_dim_by_name, [cast(u32)] dim_type: DimType, [str] name: &str);
+    isl_transform!(reset_user, isl_pw_qpolynomial_reset_user);
+    isl_transform!([into(Set)] domain, isl_pw_qpolynomial_domain);
 }
 
 impl<'a> Term<'a> {
@@ -130,16 +145,14 @@ impl<'a> TryFrom<QuasiPolynomial<'a>> for PiecewiseQuasiPolynomial<'a> {
     type Error = crate::Error;
     fn try_from(qpoly: QuasiPolynomial<'a>) -> Result<Self, Self::Error> {
         let ctx = qpoly.context_ref();
-        let handle = unsafe { barvinok_sys::isl_pw_qpolynomial_from_qpolynomial(qpoly.handle.as_ptr()) };
-        NonNull::new(handle).ok_or_else(|| {
-            ctx.last_error_or_unknown().into()
-        })
-        .map(|handle| {
-            PiecewiseQuasiPolynomial {
+        let handle =
+            unsafe { barvinok_sys::isl_pw_qpolynomial_from_qpolynomial(qpoly.handle.as_ptr()) };
+        NonNull::new(handle)
+            .ok_or_else(|| ctx.last_error_or_unknown().into())
+            .map(|handle| PiecewiseQuasiPolynomial {
                 handle,
                 marker: std::marker::PhantomData,
-            }
-        })
+            })
     }
 }
 
@@ -149,15 +162,12 @@ impl<'a> TryFrom<Term<'a>> for QuasiPolynomial<'a> {
         let ctx = term.context_ref();
         let this = ManuallyDrop::new(term);
         let handle = unsafe { barvinok_sys::isl_qpolynomial_from_term(this.handle.as_ptr()) };
-        NonNull::new(handle).ok_or_else(|| {
-            ctx.last_error_or_unknown().into()
-        })
-        .map(|handle| {
-            QuasiPolynomial {
+        NonNull::new(handle)
+            .ok_or_else(|| ctx.last_error_or_unknown().into())
+            .map(|handle| QuasiPolynomial {
                 handle,
                 marker: std::marker::PhantomData,
-            }
-        })
+            })
     }
 }
 
@@ -222,8 +232,7 @@ mod tests {
         let ctx = Context::new();
         ctx.scope(|ctx| {
             let space = Space::new_set(ctx, 1, 2);
-            let qpoly =
-                QuasiPolynomial::var_on_domain(space.clone(), DimType::Param, 0).unwrap();
+            let qpoly = QuasiPolynomial::var_on_domain(space.clone(), DimType::Param, 0).unwrap();
             assert_eq!(qpoly.context_ref().0.as_ptr(), ctx.0.as_ptr());
             println!("{:?}", qpoly);
             let qpoly2 = QuasiPolynomial::var_on_domain(space, DimType::Out, 1).unwrap();
