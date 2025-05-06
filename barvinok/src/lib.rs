@@ -551,6 +551,11 @@ mod tests {
             println!("RI Set: {:?}", ri);
             let ri_values = ri.cardinality()?;
             println!("RI Values: {:?}", ri_values);
+            ri_values.foreach_piece(|poly, set| {
+                println!("Poly: {:?}", poly);
+                println!("Set: {:?}", set);
+                Ok(())
+            })?;
             Ok(())
         })
     }
