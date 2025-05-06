@@ -9,13 +9,13 @@ pub mod list;
 pub mod local_space;
 pub mod map;
 pub mod mat;
+pub mod point;
 pub mod polynomial;
 mod printer;
 pub mod set;
 pub mod space;
 pub mod value;
 pub mod vec;
-pub mod point;
 
 mod stat;
 

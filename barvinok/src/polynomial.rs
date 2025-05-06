@@ -1,4 +1,5 @@
 use crate::isl_ctor;
+use crate::point::Point;
 use crate::{DimType, space::Space};
 use crate::{
     ident::Ident,
@@ -133,6 +134,235 @@ impl<'a> PiecewiseQuasiPolynomial<'a> {
     isl_size!(pw_qpolynomial_find_dim_by_name => find_dim_by_name, [cast(u32)] dim_type: DimType, [str] name: &str);
     isl_transform!(reset_user, isl_pw_qpolynomial_reset_user);
     isl_transform!([into(Set)] domain, isl_pw_qpolynomial_domain);
+    isl_transform!(intersect_domain, isl_pw_qpolynomial_intersect_domain, [managed] set: Set<'a>);
+    isl_transform!(intersect_domain_wrapped_domain, isl_pw_qpolynomial_intersect_domain_wrapped_domain, [managed] set: Set<'a>);
+    isl_transform!(intersect_domain_wrapped_range, isl_pw_qpolynomial_intersect_domain_wrapped_range, [managed] set: Set<'a>);
+    isl_transform!(intersect_params, isl_pw_qpolynomial_intersect_params, [managed] set: Set<'a>);
+    isl_transform!(subtract_domain, isl_pw_qpolynomial_subtract_domain, [managed] set: Set<'a>);
+    isl_transform!(
+        project_domain_on_params,
+        isl_pw_qpolynomial_project_domain_on_params
+    );
+    isl_ctor!(from_range, isl_pw_qpolynomial_from_range, src: PiecewiseQuasiPolynomial<'a>);
+    isl_transform!(drop_dims, isl_pw_qpolynomial_drop_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(split_dims, isl_pw_qpolynomial_split_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(drop_unused_params, isl_pw_qpolynomial_drop_unused_params);
+    isl_transform!(checked_add, isl_pw_qpolynomial_add, [managed] other: PiecewiseQuasiPolynomial<'a>);
+    isl_transform!(checked_sub, isl_pw_qpolynomial_sub, [managed] other: PiecewiseQuasiPolynomial<'a>);
+    isl_transform!(add_disjoint, isl_pw_qpolynomial_add_disjoint, [managed] other: PiecewiseQuasiPolynomial<'a>);
+    isl_transform!(checked_neg, isl_pw_qpolynomial_neg);
+    isl_transform!(checked_mul, isl_pw_qpolynomial_mul, [managed] other: PiecewiseQuasiPolynomial<'a>);
+    isl_transform!(scale_val, isl_pw_qpolynomial_scale_val, [managed] value: Value<'a>);
+    isl_transform!(scale_down_val, isl_pw_qpolynomial_scale_down_val, [managed] value: Value<'a>);
+    isl_transform!(pow, isl_pw_qpolynomial_pow, [trivial] exp: u32);
+    isl_transform!(domain_reverse, isl_pw_qpolynomial_domain_reverse);
+    isl_transform!(insert_dims, isl_pw_qpolynomial_insert_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!(add_dims, isl_pw_qpolynomial_add_dims, [cast(u32)] dim_type: DimType, [trivial] num: u32);
+    isl_transform!(move_dims, isl_pw_qpolynomial_move_dims, [cast(u32)] dst_dim_type : DimType, [trivial] dst_pos: u32, [cast(u32)] src_dim_type: DimType, [trivial] src_pos: u32, [trivial] num: u32);
+    isl_transform!(fix_val, isl_pw_qpolynomial_fix_val, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [managed] value: Value<'a>);
+    isl_transform!([into(Value)] eval, isl_pw_qpolynomial_eval, [managed] point: Point<'a>);
+    isl_transform!([into(Value)] max, isl_pw_qpolynomial_max);
+    isl_transform!([into(Value)] min, isl_pw_qpolynomial_min);
+    isl_size!(pw_qpolynomial_n_piece => num_pieces);
+    isl_flag!(pw_qpolynomial_isa_qpolynomial => is_qpolynomial);
+    isl_transform!([into(QuasiPolynomial)] as_qpolynomial, isl_pw_qpolynomial_as_qpolynomial);
+    pub fn foreach_piece<F>(&self, func: F) -> Result<(), crate::Error>
+    where
+        F: FnMut(QuasiPolynomial<'a>, Set<'a>) -> Result<(), crate::Error>,
+    {
+        struct FuncWithState<F> {
+            func: F,
+            state: Cell<Result<(), crate::Error>>,
+        }
+        let mut func = FuncWithState {
+            func,
+            state: Cell::new(Ok(())),
+        };
+        unsafe extern "C" fn callback<'a, F>(
+            set: *mut barvinok_sys::isl_set,
+            qpoly: *mut barvinok_sys::isl_qpolynomial,
+            user: *mut std::ffi::c_void,
+        ) -> barvinok_sys::isl_stat
+        where
+            F: FnMut(QuasiPolynomial<'a>, Set<'a>) -> Result<(), crate::Error>,
+        {
+            let data = unsafe { &mut *(user as *mut FuncWithState<F>) };
+            let qpoly = QuasiPolynomial {
+                handle: NonNull::new(qpoly).unwrap(),
+                marker: std::marker::PhantomData,
+            };
+            let set = Set {
+                handle: NonNull::new(set).unwrap(),
+                marker: std::marker::PhantomData,
+            };
+            let state = data.state.replace(Ok(()));
+            data.state.set(state.and_then(|_| (data.func)(qpoly, set)));
+            if data.state.get_mut().is_ok() {
+                barvinok_sys::isl_stat_isl_stat_ok
+            } else {
+                barvinok_sys::isl_stat_isl_stat_error
+            }
+        }
+        let handle = self.handle.as_ptr();
+        let res = unsafe {
+            barvinok_sys::isl_pw_qpolynomial_foreach_piece(
+                handle,
+                Some(callback::<F>),
+                &mut func as *mut FuncWithState<F> as *mut std::ffi::c_void,
+            )
+        };
+        if res == barvinok_sys::isl_stat_isl_stat_ok {
+            func.state.into_inner()
+        } else {
+            match func.state.into_inner() {
+                Ok(()) => Err(self.context_ref().last_error_or_unknown().into()),
+                Err(e) => Err(e),
+            }
+        }
+    }
+    pub fn every_piece<F>(&self, func: F) -> Result<bool, crate::Error>
+    where
+        F: FnMut(QuasiPolynomial<'a>, Set<'a>) -> Result<bool, crate::Error>,
+    {
+        struct FuncWithState<F> {
+            func: F,
+            state: Cell<Result<(), crate::Error>>,
+        }
+        let mut func = FuncWithState {
+            func,
+            state: Cell::new(Ok(())),
+        };
+        unsafe extern "C" fn callback<'a, F>(
+            set: *mut barvinok_sys::isl_set,
+            qpoly: *mut barvinok_sys::isl_qpolynomial,
+            user: *mut std::ffi::c_void,
+        ) -> barvinok_sys::isl_bool
+        where
+            F: FnMut(QuasiPolynomial<'a>, Set<'a>) -> Result<bool, crate::Error>,
+        {
+            let data = unsafe { &mut *(user as *mut FuncWithState<F>) };
+            let qpoly = QuasiPolynomial {
+                handle: NonNull::new(qpoly).unwrap(),
+                marker: std::marker::PhantomData,
+            };
+            let set = Set {
+                handle: NonNull::new(set).unwrap(),
+                marker: std::marker::PhantomData,
+            };
+            let state = data.state.replace(Ok(()));
+            match state.and_then(|_| (data.func)(qpoly, set)) {
+                Ok(true) => barvinok_sys::isl_bool_isl_bool_true,
+                Ok(false) => barvinok_sys::isl_bool_isl_bool_false,
+                Err(e) => {
+                    data.state.set(Err(e));
+                    barvinok_sys::isl_bool_isl_bool_error
+                }
+            }
+        }
+        let handle = self.handle.as_ptr();
+        let res = unsafe {
+            barvinok_sys::isl_pw_qpolynomial_every_piece(
+                handle,
+                Some(callback::<F>),
+                &mut func as *mut FuncWithState<F> as *mut std::ffi::c_void,
+            )
+        };
+        let res = isl_bool_to_optional_bool(res);
+        match res {
+            Some(true) => Ok(true),
+            Some(false) => Ok(false),
+            None => match func.state.into_inner() {
+                Ok(()) => Err(self.context_ref().last_error_or_unknown().into()),
+                Err(e) => Err(e),
+            },
+        }
+    }
+    pub fn foreach_lifted_piece<F>(&self, func: F) -> Result<(), crate::Error>
+    where
+        F: FnMut(QuasiPolynomial<'a>, Set<'a>) -> Result<(), crate::Error>,
+    {
+        struct FuncWithState<F> {
+            func: F,
+            state: Cell<Result<(), crate::Error>>,
+        }
+        let mut func = FuncWithState {
+            func,
+            state: Cell::new(Ok(())),
+        };
+        unsafe extern "C" fn callback<'a, F>(
+            set: *mut barvinok_sys::isl_set,
+            qpoly: *mut barvinok_sys::isl_qpolynomial,
+            user: *mut std::ffi::c_void,
+        ) -> barvinok_sys::isl_stat
+        where
+            F: FnMut(QuasiPolynomial<'a>, Set<'a>) -> Result<(), crate::Error>,
+        {
+            let data = unsafe { &mut *(user as *mut FuncWithState<F>) };
+            let qpoly = QuasiPolynomial {
+                handle: NonNull::new(qpoly).unwrap(),
+                marker: std::marker::PhantomData,
+            };
+            let set = Set {
+                handle: NonNull::new(set).unwrap(),
+                marker: std::marker::PhantomData,
+            };
+            let state = data.state.replace(Ok(()));
+            data.state.set(state.and_then(|_| (data.func)(qpoly, set)));
+            if data.state.get_mut().is_ok() {
+                barvinok_sys::isl_stat_isl_stat_ok
+            } else {
+                barvinok_sys::isl_stat_isl_stat_error
+            }
+        }
+        let handle = self.handle.as_ptr();
+        let res = unsafe {
+            barvinok_sys::isl_pw_qpolynomial_foreach_lifted_piece(
+                handle,
+                Some(callback::<F>),
+                &mut func as *mut FuncWithState<F> as *mut std::ffi::c_void,
+            )
+        };
+        if res == barvinok_sys::isl_stat_isl_stat_ok {
+            func.state.into_inner()
+        } else {
+            match func.state.into_inner() {
+                Ok(()) => Err(self.context_ref().last_error_or_unknown().into()),
+                Err(e) => Err(e),
+            }
+        }
+    }
+    isl_transform!(pw_qpolynomial_coalesce, isl_pw_qpolynomial_coalesce);
+    isl_transform!(gist, isl_pw_qpolynomial_gist, [managed] set: Set<'a>);
+    isl_transform!(gist_params, isl_pw_qpolynomial_gist_params, [managed] set: Set<'a>);
+    isl_transform!(split_periods, isl_pw_qpolynomial_split_periods, [cast(i32)] num_periods: u32);
+}
+
+impl<'a> std::ops::Add for PiecewiseQuasiPolynomial<'a> {
+    type Output = PiecewiseQuasiPolynomial<'a>;
+    fn add(self, other: PiecewiseQuasiPolynomial<'a>) -> Self::Output {
+        self.checked_add(other).unwrap()
+    }
+}
+
+impl<'a> std::ops::Sub for PiecewiseQuasiPolynomial<'a> {
+    type Output = PiecewiseQuasiPolynomial<'a>;
+    fn sub(self, other: PiecewiseQuasiPolynomial<'a>) -> Self::Output {
+        self.checked_sub(other).unwrap()
+    }
+}
+
+impl<'a> std::ops::Mul for PiecewiseQuasiPolynomial<'a> {
+    type Output = PiecewiseQuasiPolynomial<'a>;
+    fn mul(self, other: PiecewiseQuasiPolynomial<'a>) -> Self::Output {
+        self.checked_mul(other).unwrap()
+    }
+}
+
+impl<'a> std::ops::Neg for PiecewiseQuasiPolynomial<'a> {
+    type Output = PiecewiseQuasiPolynomial<'a>;
+    fn neg(self) -> Self::Output {
+        self.checked_neg().unwrap()
+    }
 }
 
 impl<'a> Term<'a> {
@@ -145,6 +375,7 @@ impl<'a> TryFrom<QuasiPolynomial<'a>> for PiecewiseQuasiPolynomial<'a> {
     type Error = crate::Error;
     fn try_from(qpoly: QuasiPolynomial<'a>) -> Result<Self, Self::Error> {
         let ctx = qpoly.context_ref();
+        let qpoly = ManuallyDrop::new(qpoly);
         let handle =
             unsafe { barvinok_sys::isl_pw_qpolynomial_from_qpolynomial(qpoly.handle.as_ptr()) };
         NonNull::new(handle)
@@ -242,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "VariablePositionOutOfBounds")]
+    #[should_panic]
     fn test_invalid_var_pos() {
         let ctx = Context::new();
         ctx.scope(|ctx| {

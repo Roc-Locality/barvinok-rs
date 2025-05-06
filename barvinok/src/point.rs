@@ -1,6 +1,8 @@
-use crate::{impl_isl_handle, isl_ctor, isl_project, isl_transform, space::Space, value::Value, DimType};
-use std::ptr::NonNull;
+use crate::{
+    DimType, impl_isl_handle, isl_ctor, isl_project, isl_transform, space::Space, value::Value,
+};
 use std::mem::ManuallyDrop;
+use std::ptr::NonNull;
 
 impl_isl_handle!(Point, point);
 
