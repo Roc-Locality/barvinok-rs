@@ -31,6 +31,7 @@ unsafe extern "C" {
 
 impl<'a, W: std::fmt::Write> CookieFile<'a, W> {
     fn new(reference: &'a mut W) -> Self {
+        #[allow(clippy::unnecessary_cast)]
         unsafe extern "C" fn write<W: std::fmt::Write>(
             cookie: *mut std::ffi::c_void,
             buf: *const std::ffi::c_char,

@@ -1,0 +1,35 @@
+name: Build
+on: [push, pull_request]
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+      CC: "sccache clang"
+      CXX: "sccache clang++"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Install NTL, GMP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libntl-dev libgmp-dev
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy, rustfmt
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
+      - name: Run Clippy
+        run: cargo clippy
+      - name: Run RustFmt
+        run: cargo fmt --check
+      - name: Run Rust Test
+        run: env RUST_LOG=trace RUST_BACKTRACE=1 cargo test --release
