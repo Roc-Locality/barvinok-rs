@@ -15,6 +15,7 @@ pub mod set;
 pub mod space;
 pub mod value;
 pub mod vec;
+pub mod point;
 
 mod stat;
 
