@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "barvinok"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "barvinok-sys",
@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "barvinok-sys"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "autotools",
  "bindgen",

@@ -1,10 +1,10 @@
 [package]
 name = "barvinok"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition = "2024"
 
 [dependencies]
-barvinok-sys = { path = "../barvinok-sys" }
+barvinok-sys = { path = "../barvinok-sys", version = "0.1.0-alpha.1" }
 num-traits = "0.2.19"
 paste = "1.0.15"
 thiserror = "2.0.12"

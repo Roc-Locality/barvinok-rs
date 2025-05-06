@@ -1,6 +1,6 @@
 [package]
 name = "barvinok-sys"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition = "2024"
 build = "build.rs"
 
