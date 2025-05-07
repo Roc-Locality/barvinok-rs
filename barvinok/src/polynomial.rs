@@ -46,6 +46,8 @@ impl<'a> QuasiPolynomial<'a> {
     isl_transform!(checked_add, isl_qpolynomial_add, [managed] other: QuasiPolynomial<'a>);
     isl_transform!(checked_sub, isl_qpolynomial_sub, [managed] other: QuasiPolynomial<'a>);
     isl_transform!(checked_mul, isl_qpolynomial_mul, [managed] other: QuasiPolynomial<'a>);
+    isl_transform!(gist, isl_qpolynomial_gist, [managed] set: Set<'a>);
+    isl_transform!(gist_params, isl_qpolynomial_gist_params, [managed] set: Set<'a>);
     pub fn foreach_term<F>(&self, func: F) -> Result<(), crate::Error>
     where
         F: FnMut(Term<'a>) -> Result<(), crate::Error>,
