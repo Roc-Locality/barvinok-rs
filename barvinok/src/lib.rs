@@ -310,6 +310,33 @@ macro_rules! isl_ctor {
                 })
         }
     };
+    ([ctx] $func:ident, $sys_fn:ident
+        $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
+           pub fn $func(
+               ctx: $crate::ContextRef<'a>
+               $(, $name: $ty )*
+           ) -> Result<Self, crate::Error> {
+               $(
+                   let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
+               )*
+
+               // call the raw C function
+               let raw = unsafe {
+                   barvinok_sys::$sys_fn(
+                       ctx.0.as_ptr()
+                       $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) )*
+                   )
+               };
+
+               // wrap in NonNull, use saved `ctx` on error
+               NonNull::new(raw)
+                   .ok_or_else(|| ctx.last_error_or_unknown().into())
+                   .map(|handle| Self {
+                       handle,
+                       marker: std::marker::PhantomData,
+                   })
+           }
+       };
 }
 
 macro_rules! isl_transform {
@@ -503,7 +530,7 @@ mod tests {
                 .set_coefficient_si(DimType::Out, 1, 1)?
                 .set_coefficient_si(DimType::Out, 2, -1)?
                 .set_constant_si(-1)?;
-            let is = Set::new_universe(space.clone())?
+            let is = Set::universe(space.clone())?
                 .add_constraint(i_ge_0)?
                 .add_constraint(i_lt_n)?
                 .add_constraint(j_ge_0)?
