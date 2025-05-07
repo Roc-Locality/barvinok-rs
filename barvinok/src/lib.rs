@@ -507,8 +507,8 @@ mod tests {
         //            access A[k]
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 1, 3);
-            let local_space = LocalSpace::from(space.clone());
+            let space = Space::set(ctx, 1, 3)?;
+            let local_space = LocalSpace::try_from(space.clone())?;
             let i_ge_0 = Constraint::new_inequality(local_space.clone())
                 .set_coefficient_si(DimType::Out, 0, 1)?
                 .set_constant_si(0)?;
@@ -545,7 +545,7 @@ mod tests {
             let card = is.clone().cardinality()?;
             println!("card IS := {:?}", card);
             let space = is.get_space()?;
-            let local_space = LocalSpace::from(space.clone());
+            let local_space = LocalSpace::try_from(space.clone())?;
             let array_id = Ident::new(ctx, "A")?;
             let access = Affine::var_on_domain(local_space, DimType::Out, 2)?;
             let access = Map::try_from(access)?

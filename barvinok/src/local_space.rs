@@ -15,16 +15,18 @@ use crate::{
 
 impl_isl_handle!(LocalSpace, local_space);
 
-impl<'a> From<Space<'a>> for LocalSpace<'a> {
-    fn from(space: Space<'a>) -> Self {
+impl<'a> TryFrom<Space<'a>> for LocalSpace<'a> {
+    fn try_from(space: Space<'a>) -> Result<Self, crate::Error> {
+        let ctx = space.context_ref();
         let space = ManuallyDrop::new(space);
         let handle = unsafe { barvinok_sys::isl_local_space_from_space(space.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
+        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+        Ok(Self {
             handle,
             marker: std::marker::PhantomData,
-        }
+        })
     }
+    type Error = crate::Error;
 }
 
 impl<'a> LocalSpace<'a> {
@@ -280,8 +282,8 @@ mod tests {
     fn test_local_space() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new(ctx, 2, 3, 4);
-            let local_space = LocalSpace::from(space.clone());
+            let space = Space::new(ctx, 2, 3, 4).unwrap();
+            let local_space = LocalSpace::try_from(space.clone()).unwrap();
             assert_eq!(
                 local_space.get_space().handle.as_ptr(),
                 space.handle.as_ptr()
@@ -299,8 +301,8 @@ mod tests {
     fn test_lifting_set_space() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 2, 3);
-            let local_space = LocalSpace::from(space.clone());
+            let space = Space::set(ctx, 2, 3).unwrap();
+            let local_space = LocalSpace::try_from(space.clone()).unwrap();
             let lifted_space = local_space.lifting().unwrap();
             println!("{:?}", lifted_space);
         });
@@ -310,8 +312,8 @@ mod tests {
     fn test_mutate_shapes() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new(ctx, 2, 3, 4);
-            let mut local_space = LocalSpace::from(space.clone());
+            let space = Space::new(ctx, 2, 3, 4).unwrap();
+            let mut local_space = LocalSpace::try_from(space.clone()).unwrap();
             local_space.add_dims(DimType::Param, 2);
             local_space.set_tuple_id(DimType::In, Ident::new(ctx, "input").unwrap());
             local_space.set_dim_name(DimType::Out, 0, "y").unwrap();

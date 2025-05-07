@@ -106,7 +106,7 @@ mod tests {
     fn test_aff() -> anyhow::Result<()> {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 2, 2);
+            let space = Space::set(ctx, 2, 2)?;
             let aff = Affine::zero_on_domain_space(space)?;
             println!("Affine: {:?}", aff);
             Ok(())
@@ -117,7 +117,7 @@ mod tests {
     fn test_aff_with_name() -> anyhow::Result<()> {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 2, 2);
+            let space = Space::set(ctx, 2, 2)?;
             let aff = Affine::zero_on_domain_space(space)?
                 .set_dim_name(DimType::Param, 0, "N")?
                 .set_dim_name(DimType::Param, 1, "M")?
@@ -132,8 +132,8 @@ mod tests {
     fn test_aff_binary() -> anyhow::Result<()> {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 2, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::set(ctx, 2, 2)?;
+            let local_space = LocalSpace::try_from(space).unwrap();
             let aff1 = Affine::var_on_domain(local_space.clone(), DimType::Param, 0)?;
             let aff2 = Affine::var_on_domain(local_space.clone(), DimType::Out, 1)?;
             let aff3 = Affine::zero_on_domain(local_space)?;

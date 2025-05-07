@@ -153,8 +153,8 @@ mod tests {
     fn test_from_constraints() {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new(context, 1, 2, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::new(context, 1, 2, 2).unwrap();
+            let local_space = LocalSpace::try_from(space).unwrap();
             let mut constraint = Constraint::new_inequality(local_space);
             constraint = constraint.set_constant_si(5).unwrap();
             constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
@@ -167,7 +167,7 @@ mod tests {
     fn test_lex_lt_on_space() -> anyhow::Result<()> {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new_set(context, 2, 2);
+            let space = Space::set(context, 2, 2).unwrap();
             let basic_map = Map::lex_lt(space)?;
             println!("Lexicographically less than map: {:?}", basic_map);
             Ok(())

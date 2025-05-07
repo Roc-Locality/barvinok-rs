@@ -224,7 +224,7 @@ mod test {
     fn test_basic_set_creation() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new(ctx, 0, 0, 3);
+            let space = Space::new(ctx, 0, 0, 3).unwrap();
             let basic_set = BasicSet::universe(space.clone()).unwrap();
             println!("{:?}", basic_set);
             let basic_set = BasicSet::empty(space.clone()).unwrap();
@@ -240,7 +240,7 @@ mod test {
     fn test_basic_set_bin_ops() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new(ctx, 0, 0, 3);
+            let space = Space::new(ctx, 0, 0, 3).unwrap();
             let basic_set1 = BasicSet::universe(space.clone()).unwrap();
             let basic_set2 = BasicSet::empty(space.clone()).unwrap();
             let basic_set3 = basic_set1.intersect(basic_set2).unwrap();
@@ -252,7 +252,7 @@ mod test {
     fn test_basic_set_unary_ops() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new(ctx, 0, 0, 3);
+            let space = Space::new(ctx, 0, 0, 3).unwrap();
             let basic_set = BasicSet::positive_orthant(space.clone()).unwrap();
             let basic_set = basic_set.affine_hull().unwrap();
             println!("{:?}", basic_set);
@@ -262,7 +262,7 @@ mod test {
     fn test_basic_set_cardinality() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 1, 4);
+            let space = Space::set(ctx, 1, 4).unwrap();
             let basic_set = BasicSet::universe(space.clone()).unwrap();
             let card = basic_set.cardinality().unwrap();
             println!("{:?}", card);
@@ -272,8 +272,8 @@ mod test {
     fn test_interval_product_space() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 3, 3);
-            let local_space = LocalSpace::from(space.clone());
+            let space = Space::set(ctx, 3, 3).unwrap();
+            let local_space = LocalSpace::try_from(space.clone()).unwrap();
             let mut set = BasicSet::universe(space.clone()).unwrap();
             for i in 0..3 {
                 {
@@ -315,7 +315,7 @@ mod test {
     fn test_basic_set_list_intersect() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 1, 5);
+            let space = Space::set(ctx, 1, 5).unwrap();
             let basic_set1 = BasicSet::universe(space.clone()).unwrap();
             let basic_set2 = BasicSet::empty(space.clone()).unwrap();
             let mut list = List::new(ctx, 2);
@@ -332,8 +332,8 @@ mod test {
         //         for k in 0 .. j
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let space = Space::new_set(ctx, 1, 3);
-            let local_space = LocalSpace::from(space.clone());
+            let space = Space::set(ctx, 1, 3).unwrap();
+            let local_space = LocalSpace::try_from(space.clone()).unwrap();
             let i_ge_0 = Constraint::new_inequality(local_space.clone())
                 .set_coefficient_si(DimType::Out, 0, 1)?
                 .set_constant_si(0)?;

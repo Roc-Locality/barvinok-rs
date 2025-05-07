@@ -297,8 +297,8 @@ mod tests {
     fn test_new_equality() {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new(context, 1, 2, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::new(context, 1, 2, 2).unwrap();
+            let local_space = LocalSpace::try_from(space).unwrap();
             let constraint = Constraint::new_equality(local_space);
             println!("Constraint: {:?}", constraint);
         });
@@ -308,8 +308,8 @@ mod tests {
     fn test_new_inequality() {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new(context, 1, 2, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::new(context, 1, 2, 2).unwrap();
+            let local_space = LocalSpace::try_from(space).unwrap();
             let constraint = Constraint::new_inequality(local_space);
             println!("Constraint: {:?}", constraint);
         });
@@ -319,8 +319,8 @@ mod tests {
     fn test_inequality_constant_and_coeff() {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new(context, 1, 2, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::new(context, 1, 2, 2).unwrap();
+            let local_space = LocalSpace::try_from(space).unwrap();
             let constraint = Constraint::new_inequality(local_space);
             let constant_val = constraint.get_constant();
             println!("Constant Value: {:?}", constant_val);
@@ -333,8 +333,8 @@ mod tests {
     fn test_set_constant_and_coeff() {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new(context, 1, 2, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::new(context, 1, 2, 2).unwrap();
+            let local_space = LocalSpace::try_from(space).unwrap();
             let mut constraint = Constraint::new_inequality(local_space);
             constraint = constraint.set_constant_si(5).unwrap();
             constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
@@ -346,8 +346,8 @@ mod tests {
     fn test_negate() {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new(context, 1, 2, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::new(context, 1, 2, 2).unwrap();
+            let local_space = LocalSpace::try_from(space).unwrap();
             let mut constraint = Constraint::new_inequality(local_space);
             constraint = constraint.set_constant_si(5).unwrap();
             constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
@@ -360,8 +360,8 @@ mod tests {
     fn test_get_affine() {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new_set(context, 1, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::set(context, 1, 2).unwrap();
+            let local_space = LocalSpace::try_from(space).unwrap();
             let mut constraint = Constraint::new_inequality(local_space);
             constraint = constraint.set_constant_si(5).unwrap();
             constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
@@ -374,8 +374,8 @@ mod tests {
     fn test_into_basic_set() {
         let context = Context::new();
         context.scope(|context| {
-            let space = Space::new_set(context, 1, 2);
-            let local_space = LocalSpace::from(space);
+            let space = Space::set(context, 1, 2).unwrap();
+            let local_space = LocalSpace::try_from(space).unwrap();
             let mut constraint = Constraint::new_inequality(local_space);
             constraint = constraint.set_constant_si(5).unwrap();
             constraint = constraint.set_coefficient_si(DimType::Param, 0, 3).unwrap();
