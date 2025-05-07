@@ -4,7 +4,7 @@ use crate::{
     ContextRef, DimType,
     constraint::Constraint,
     ident::Ident,
-    impl_isl_handle, isl_project,
+    impl_isl_handle, isl_project, isl_transform,
     list::List,
     map::{BasicMap, Map},
     nonnull_or_alloc_error,
@@ -335,6 +335,7 @@ impl<'a> Set<'a> {
     set_binary!(set_intersect_factor_range => intersect_factor_range);
     set_binary!(set_subtract => subtract);
     set_unary!(Set, set, complement);
+    isl_transform!(move_dims, isl_set_move_dims, [cast(u32)] dst_dim_type : DimType, [trivial] dst_pos : u32, [cast(u32)] src_dim_type : DimType, [trivial] src_pos : u32, [trivial] num : u32);
     pub fn num_dims(&self) -> Option<u32> {
         let num = unsafe { barvinok_sys::isl_set_n_dim(self.handle.as_ptr()) };
         isl_size_to_optional_u32(num)
