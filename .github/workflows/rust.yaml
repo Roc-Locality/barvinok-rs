@@ -29,7 +29,7 @@ jobs:
           wget https://libntl.org/ntl-11.5.1.tar.gz
           tar -xzf ntl-11.5.1.tar.gz
           cd ntl-11.5.1/src
-          ./configure NTL_GMP_LIP=on PREFIX=/usr/local GMP_PREFIX=$(brew --prefix gmp)
+          ./configure NTL_GMP_LIP=on SHARED=on PREFIX=/usr/local GMP_PREFIX=$(brew --prefix gmp)
           make -j $(sysctl -n hw.logicalcpu)
           sudo make install
       - name: Setup Rust Toolchain
