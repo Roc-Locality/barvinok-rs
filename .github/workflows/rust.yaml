@@ -25,7 +25,13 @@ jobs:
       - name: Install Toolchain (MacOS)
         if: startsWith(matrix.os, 'macos')
         run: |
-          brew install ntl gmp automake autoconf libtool make
+          brew install gmp automake autoconf libtool make
+          wget https://libntl.org/ntl-11.5.1.tar.gz
+          tar -xzf ntl-11.5.1.tar.gz
+          cd ntl-11.5.1/src
+          ./configure NTL_GMP_LIP=on PREFIX=/usr/local GMP_PREFIX=$(brew --prefix gmp)
+          make -j $(sysctl -n hw.logicalcpu)
+          sudo make install
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
