@@ -4,7 +4,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
     env:
       RUSTFLAGS: "-Dwarnings"
       SCCACHE_GHA_ENABLED: "true"
@@ -17,10 +17,15 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Install NTL, GMP
+      - name: Install NTL, GMP (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libntl-dev libgmp-dev
+      - name: Install NTL, GMP (MacOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install ntl gmp automake autoconf libtool make
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
