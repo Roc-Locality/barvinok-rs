@@ -8,16 +8,21 @@ fn main() {
     if cfg!(target_os = "macos") {
         println!("cargo:rustc-link-search=native=/usr/local/lib");
         println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
-        build.cflag("-I/usr/local/include");
-        build.cflag("-I/opt/homebrew/include");
-        build.cflag("-L/usr/local/lib");
-        build.cflag("-L/opt/homebrew/lib");
-        build.cxxflag("-I/usr/local/include");
-        build.cxxflag("-I/opt/homebrew/include");
-        build.cxxflag("-L/usr/local/lib");
-        build.cxxflag("-L/opt/homebrew/lib");
-        build.ldflag("-L/usr/local/lib");
-        build.ldflag("-L/opt/homebrew/lib");
+        if let Ok(gmp_prefix) = std::process::Command::new("brew")
+            .arg("--prefix")
+            .arg("gmp")
+            .output()
+        {
+            if gmp_prefix.status.success() {
+                let gmp_prefix = String::from_utf8_lossy(&gmp_prefix.stdout);
+                println!("cargo:rustc-link-search=native={}/lib", gmp_prefix);
+                build.config_option("--with-gmp-prefix", Some(&gmp_prefix));
+            }
+        }
+        // for NTL, it is a bit complicated as brew formula confiures it wrongly. We expect user to install it.
+        let ntl_prefix = std::env::var("NTL_PREFIX").unwrap_or_else(|_| "/usr/local".to_string());
+        println!("cargo:rustc-link-search=native={}/lib", ntl_prefix);
+        build.config_option("--with-ntl-prefix", Some(&ntl_prefix));
     }
 
     let dst = build.reconf("-ivf").build();
