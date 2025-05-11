@@ -15,13 +15,13 @@ fn main() {
         {
             if gmp_prefix.status.success() {
                 let gmp_prefix = String::from_utf8_lossy(&gmp_prefix.stdout);
-                println!("cargo:rustc-link-search=native={}/lib", gmp_prefix);
+                println!("cargo:rustc-link-search=native={gmp_prefix}/lib");
                 build.config_option("--with-gmp-prefix", Some(&gmp_prefix));
             }
         }
         // for NTL, it is a bit complicated as brew formula confiures it wrongly. We expect user to install it.
         let ntl_prefix = std::env::var("NTL_PREFIX").unwrap_or_else(|_| "/usr/local".to_string());
-        println!("cargo:rustc-link-search=native={}/lib", ntl_prefix);
+        println!("cargo:rustc-link-search=native={ntl_prefix}/lib");
         build.config_option("--with-ntl-prefix", Some(&ntl_prefix));
     }
 
