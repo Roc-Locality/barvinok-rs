@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 barvinok-sys = { path = "../barvinok-sys", version = "0.1.0-alpha.1" }
+libc = { version = "0.2.172", default-features = false }
 num-traits = "0.2.19"
 paste = "1.0.15"
 thiserror = "2.0.12"

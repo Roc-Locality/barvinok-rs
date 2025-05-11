@@ -13,7 +13,7 @@ use crate::{
     stat::{isl_bool_to_optional_bool, isl_size_to_optional_u32},
 };
 
-impl_isl_handle!(LocalSpace, local_space);
+impl_isl_handle!([printer] LocalSpace, local_space);
 
 impl<'a> TryFrom<Space<'a>> for LocalSpace<'a> {
     fn try_from(space: Space<'a>) -> Result<Self, crate::Error> {

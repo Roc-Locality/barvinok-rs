@@ -2,7 +2,7 @@ use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{Context, impl_isl_handle, stat::isl_size_to_optional_u32, value::Value};
 
-impl_isl_handle!(Vector, vec);
+impl_isl_handle!([printer] Vector, vec);
 
 impl<'a> Vector<'a> {
     pub fn new(ctx: &'a Context, dim: u32) -> Self {

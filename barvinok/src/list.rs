@@ -1,4 +1,4 @@
-use std::{mem::ManuallyDrop, ptr::NonNull};
+use std::{ffi::c_char, mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{ContextRef, nonnull_or_alloc_error, printer::ISLPrint};
 
@@ -408,23 +408,14 @@ impl<'a, T: ListRawAPI + 'a> Clone for List<'a, T> {
     }
 }
 
-impl<'a, T: ListRawAPI + 'a> ISLPrint<'a> for List<'a, T> {
+unsafe impl<'a, T: ListRawAPI + 'a> ISLPrint<'a> for List<'a, T> {
     type Handle = T::ListHandle;
-
-    fn context(&self) -> ContextRef<'a> {
-        self.context()
-    }
-
     fn handle(&self) -> *mut Self::Handle {
         self.handle.as_ptr()
     }
 
-    unsafe fn isl_printer_print(
-        printer: *mut barvinok_sys::isl_printer,
-        handle: *mut Self::Handle,
-    ) -> *mut barvinok_sys::isl_printer {
-        unsafe { T::printer_print_list(printer, handle) }
-    }
+    const TO_STRING_FFI: unsafe fn(*mut T::ListHandle) -> *mut c_char =
+        |handle| unsafe { T::list_to_str(handle) };
 }
 
 impl<'a, T: ListRawAPI + 'a> std::fmt::Debug for List<'a, T> {

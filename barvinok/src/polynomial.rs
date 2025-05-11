@@ -11,7 +11,7 @@ use crate::{
 use std::mem::ManuallyDrop;
 use std::{cell::Cell, ptr::NonNull};
 
-impl_isl_handle!(QuasiPolynomial, qpolynomial);
+impl_isl_handle!([printer] QuasiPolynomial, qpolynomial);
 impl_isl_handle!([noprint] Term, term);
 impl_isl_handle!(PiecewiseQuasiPolynomial, pw_qpolynomial);
 
