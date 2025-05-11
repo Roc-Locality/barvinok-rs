@@ -12,10 +12,8 @@ fn main() {
         build.cflag("-I/opt/homebrew/include");
         build.cxxflag("-I/usr/local/include");
         build.cxxflag("-I/opt/homebrew/include");
-        build.cflag("-L/usr/local/lib");
-        build.cflag("-L/opt/homebrew/lib");
-        build.cxxflag("-L/usr/local/lib");
-        build.cxxflag("-L/opt/homebrew/lib");
+        build.ldflag("-L/usr/local/lib");
+        build.ldflag("-L/opt/homebrew/lib");
     }
 
     let dst = build.reconf("-ivf").build();
