@@ -24,7 +24,11 @@ fn main() {
     println!("cargo:rustc-link-lib=static=polylibgmp");
     println!("cargo:rustc-link-lib=dylib=gmp");
     println!("cargo:rustc-link-lib=dylib=ntl");
-    println!("cargo:rustc-link-lib=dylib=stdc++");
+    if cfg!(target_os = "macos") {
+        println!("cargo:rustc-link-lib=dylib=c++");
+    } else {
+        println!("cargo:rustc-link-lib=dylib=stdc++");
+    }
     println!("cargo:rerun-if-changed=build.rs");
     let include_dir = dst.join("include");
     let bindings = bindgen::Builder::default()
