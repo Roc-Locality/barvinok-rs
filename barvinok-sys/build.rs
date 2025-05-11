@@ -10,8 +10,12 @@ fn main() {
         println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
         build.cflag("-I/usr/local/include");
         build.cflag("-I/opt/homebrew/include");
+        build.cflag("-L/usr/local/lib");
+        build.cflag("-L/opt/homebrew/lib");
         build.cxxflag("-I/usr/local/include");
         build.cxxflag("-I/opt/homebrew/include");
+        build.cxxflag("-L/usr/local/lib");
+        build.cxxflag("-L/opt/homebrew/lib");
         build.ldflag("-L/usr/local/lib");
         build.ldflag("-L/opt/homebrew/lib");
     }
