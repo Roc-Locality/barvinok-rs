@@ -11,7 +11,7 @@ use crate::{
     value::Value,
 };
 
-impl_isl_handle!(Constraint, constraint);
+impl_isl_handle!([printer] Constraint, constraint);
 
 impl<'a> Constraint<'a> {
     pub fn new_equality(local_space: LocalSpace<'a>) -> Self {
