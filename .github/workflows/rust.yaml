@@ -22,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libntl-dev libgmp-dev
-      - name: Install NTL, GMP (MacOS)
+      - name: Install Toolchain (MacOS)
         if: startsWith(matrix.os, 'macos')
         run: |
           brew install ntl gmp automake autoconf libtool make

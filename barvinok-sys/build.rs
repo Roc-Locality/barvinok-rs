@@ -3,7 +3,22 @@ use std::path::PathBuf;
 fn main() {
     use autotools::Config;
 
-    let dst = Config::new("barvinok").reconf("-ivf").build();
+    let mut build = Config::new("barvinok");
+
+    if cfg!(target_os = "macos") {
+        println!("cargo:rustc-link-search=native=/usr/local/lib");
+        println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
+        build.cflag("-I/usr/local/include");
+        build.cflag("-I/opt/homebrew/include");
+        build.cxxflag("-I/usr/local/include");
+        build.cxxflag("-I/opt/homebrew/include");
+        build.cflag("-L/usr/local/lib");
+        build.cflag("-L/opt/homebrew/lib");
+        build.cxxflag("-L/usr/local/lib");
+        build.cxxflag("-L/opt/homebrew/lib");
+    }
+
+    let dst = build.reconf("-ivf").build();
 
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-lib=static=barvinok");
