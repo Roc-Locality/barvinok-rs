@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+# Pass all arguments to sccache c++
+exec $COMPILER_LAUNCHER c++ "$@"

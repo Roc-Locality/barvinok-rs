@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# Initialize an array to store filtered arguments
+filtered_args=()
+
+# Iterate through all arguments
+for arg in "$@"; do
+    # Skip any argument that contains "-std="
+    if [[ "$arg" != *"-std="* ]]; then
+        filtered_args+=("$arg")
+    fi
+done
+
+# Execute with the filtered arguments
+exec $COMPILER_LAUNCHER cc "${filtered_args[@]}"

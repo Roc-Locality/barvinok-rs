@@ -4,29 +4,43 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
     env:
       RUSTFLAGS: "-Dwarnings"
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
       CC: "sccache clang"
       CXX: "sccache clang++"
+      COMPILER_LAUNCHER: "sccache"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
-      - name: Install NTL, GMP
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
+      - name: Install NTL, GMP (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libntl-dev libgmp-dev
+      - name: Install Toolchain (MacOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install gmp automake autoconf libtool make
+          wget https://libntl.org/ntl-11.5.1.tar.gz
+          tar -xzf ntl-11.5.1.tar.gz
+          cd ntl-11.5.1/src
+          env CC=clang CXX=clang++ ./configure NTL_GMP_LIP=on SHARED=on PREFIX=/usr/local/opt/ntl GMP_PREFIX=$(brew --prefix gmp)
+          make -j $(sysctl -n hw.logicalcpu)
+          sudo make install
+          echo GMP_PREFIX=$(brew --prefix gmp) >> $GITHUB_ENV
+          echo NTL_PREFIX=/usr/local/opt/ntl >> $GITHUB_ENV
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy, rustfmt
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.8
       - name: Run Clippy
         run: cargo clippy
       - name: Run RustFmt
