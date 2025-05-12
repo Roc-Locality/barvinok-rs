@@ -14,7 +14,8 @@ fn main() {
         build.config_option("with-gmp-prefix", Some(&gmp_prefix));
 
         // NTL
-        let ntl_prefix = std::env::var("NTL_PREFIX").unwrap_or_else(|_| "/usr/local".to_string());
+        let ntl_prefix =
+            std::env::var("NTL_PREFIX").unwrap_or_else(|_| "/usr/local/opt/ntl".to_string());
         println!("cargo:rustc-link-search=native={ntl_prefix}/lib");
         additional_include_dir.push(format!("-I{ntl_prefix}/include"));
         build.config_option("with-ntl-prefix", Some(&ntl_prefix));

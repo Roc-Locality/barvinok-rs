@@ -11,6 +11,7 @@ jobs:
       RUSTC_WRAPPER: "sccache"
       CC: "sccache clang"
       CXX: "sccache clang++"
+      COMPILER_LAUNCHER: "sccache"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -31,9 +32,11 @@ jobs:
           wget https://libntl.org/ntl-11.5.1.tar.gz
           tar -xzf ntl-11.5.1.tar.gz
           cd ntl-11.5.1/src
-          env CC=clang CXX=clang++ ./configure NTL_GMP_LIP=on SHARED=on PREFIX=/usr/local GMP_PREFIX=$(brew --prefix gmp)
+          env CC=clang CXX=clang++ ./configure NTL_GMP_LIP=on SHARED=on PREFIX=/usr/local/opt/ntl GMP_PREFIX=$(brew --prefix gmp)
           make -j $(sysctl -n hw.logicalcpu)
           sudo make install
+          echo GMP_PREFIX=$(brew --prefix gmp) >> $GITHUB_ENV
+          echo NTL_PREFIX=/usr/local/opt/ntl >> $GITHUB_ENV
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
