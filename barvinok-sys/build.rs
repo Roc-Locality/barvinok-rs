@@ -6,29 +6,19 @@ fn main() {
     let mut build = Config::new("barvinok");
     let mut additional_include_dir = Vec::new();
     if cfg!(target_os = "macos") {
-        println!("cargo:rustc-link-search=native=/usr/local/lib");
-        println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
-        if let Ok(gmp_prefix) = std::process::Command::new("brew")
-            .arg("--prefix")
-            .arg("gmp")
-            .output()
-        {
-            if gmp_prefix.status.success() {
-                let gmp_prefix = String::from_utf8_lossy(&gmp_prefix.stdout);
-                println!("cargo:rustc-link-search=native={gmp_prefix}/lib");
-                additional_include_dir.push(format!("-I{gmp_prefix}/include"));
-                build.config_option("with-gmp-prefix", Some(&gmp_prefix));
-                // For some reason, inner library such as polylib does not get this include dir
-                // so we need to add it manually
-                build.cxxflag(format!("-I{gmp_prefix}/include"));
-                build.cflag(format!("-I{gmp_prefix}/include"));
-            }
-        }
-        // for NTL, it is a bit complicated as brew formula confiures it wrongly. We expect user to install it.
+        // GMP
+        let gmp_prefix =
+            std::env::var("GMP_PREFIX").unwrap_or_else(|_| "/usr/local/opt/gmp".to_string());
+        println!("cargo:rustc-link-search=native={gmp_prefix}/lib");
+        additional_include_dir.push(format!("-I{gmp_prefix}/include"));
+        build.config_option("with-gmp-prefix", Some(&gmp_prefix));
+
+        // NTL
         let ntl_prefix = std::env::var("NTL_PREFIX").unwrap_or_else(|_| "/usr/local".to_string());
         println!("cargo:rustc-link-search=native={ntl_prefix}/lib");
         additional_include_dir.push(format!("-I{ntl_prefix}/include"));
         build.config_option("with-ntl-prefix", Some(&ntl_prefix));
+
         // use <src dir>/misc/cc-wrapper for clang to workaround bug in barvinok's autotools
         let src_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let src_dir = PathBuf::from(src_dir);
