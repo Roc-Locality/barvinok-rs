@@ -23,6 +23,13 @@ fn main() {
         let ntl_prefix = std::env::var("NTL_PREFIX").unwrap_or_else(|_| "/usr/local".to_string());
         println!("cargo:rustc-link-search=native={ntl_prefix}/lib");
         build.config_option("with-ntl-prefix", Some(&ntl_prefix));
+        // use <src dir>/misc/cc-wrapper for clang to workaround bug in barvinok's autotools
+        let src_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let src_dir = PathBuf::from(src_dir);
+        let cc_wrapper = src_dir.join("misc").join("cc-wrapper");
+        let cxx_wrapper = src_dir.join("misc").join("cxx-wrapper");
+        build.env("CC", cc_wrapper);
+        build.env("CXX", cxx_wrapper);
     }
 
     let dst = build.reconf("-ivf").build();

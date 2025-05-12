@@ -17,6 +17,8 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
       - name: Install NTL, GMP (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
@@ -36,8 +38,6 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy, rustfmt
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.8
       - name: Run Clippy
         run: cargo clippy
       - name: Run RustFmt
