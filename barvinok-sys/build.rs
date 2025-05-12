@@ -18,6 +18,10 @@ fn main() {
                 println!("cargo:rustc-link-search=native={gmp_prefix}/lib");
                 additional_include_dir.push(format!("-I{gmp_prefix}/include"));
                 build.config_option("with-gmp-prefix", Some(&gmp_prefix));
+                // For some reason, inner library such as polylib does not get this include dir
+                // so we need to add it manually
+                build.cxxflag(format!("-I{gmp_prefix}/include"));
+                build.cflag(format!("-I{gmp_prefix}/include"));
             }
         }
         // for NTL, it is a bit complicated as brew formula confiures it wrongly. We expect user to install it.
