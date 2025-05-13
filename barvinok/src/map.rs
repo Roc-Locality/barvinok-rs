@@ -138,6 +138,8 @@ impl<'a> Map<'a> {
     isl_transform!(set_tuple_id, isl_map_set_tuple_id, [cast(u32)] dim_type: DimType, [managed] id: Ident<'a>);
     isl_transform!([into(PiecewiseQuasiPolynomial)] cardinality, isl_map_card);
     isl_transform!(add_constraint, isl_map_add_constraint, [managed] constraint: Constraint<'a>);
+    isl_transform!([into(Set)] domain, isl_map_domain);
+    isl_transform!([into(Set)] range, isl_map_range);
 }
 
 #[cfg(test)]
