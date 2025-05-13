@@ -2,6 +2,7 @@ use std::{mem::ManuallyDrop, ptr::NonNull};
 
 use crate::aff::Affine;
 use crate::ident::Ident;
+use crate::list::List;
 use crate::local_space::LocalSpace;
 use crate::polynomial::PiecewiseQuasiPolynomial;
 use crate::set::Set;
@@ -45,12 +46,27 @@ impl<'a> TryFrom<Affine<'a>> for Map<'a> {
     type Error = crate::Error;
 }
 
+impl<'a> TryFrom<BasicMap<'a>> for Map<'a> {
+    fn try_from(basic_map: BasicMap<'a>) -> Result<Self, Self::Error> {
+        let ctx = basic_map.context_ref();
+        let basic_map = ManuallyDrop::new(basic_map);
+        let handle = unsafe { barvinok_sys::isl_map_from_basic_map(basic_map.handle.as_ptr()) };
+        let handle = NonNull::new(handle).ok_or_else(|| ctx.last_error_or_unknown())?;
+        Ok(Map {
+            handle,
+            marker: std::marker::PhantomData,
+        })
+    }
+    type Error = crate::Error;
+}
+
 impl<'a> BasicMap<'a> {
     isl_size!(basic_map_total_dim => total_dim);
     isl_size!(basic_map_dim => dim, [cast(u32)] dim_type: DimType);
     isl_project!([into(Space)] get_space, isl_basic_map_get_space);
     isl_project!([into(LocalSpace)] get_local_space, isl_basic_map_get_local_space);
     isl_project!([into(Affine)] get_div, isl_basic_map_get_div, [cast(i32)] pos: u32);
+    isl_ctor!(from_affine_list, isl_basic_map_from_aff_list, domain_space: Space<'a>, [managed] aff: List<'a, Affine<'a>>);
 }
 
 #[allow(clippy::should_implement_trait)]

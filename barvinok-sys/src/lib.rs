@@ -4,6 +4,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::ptr_offset_with_cast)]
 #![no_std]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
