@@ -137,6 +137,7 @@ impl<'a> Map<'a> {
     isl_transform!(remove_inputs, isl_map_remove_inputs, [trivial] pos: u32, [trivial] num: u32);
     isl_transform!(set_tuple_id, isl_map_set_tuple_id, [cast(u32)] dim_type: DimType, [managed] id: Ident<'a>);
     isl_transform!([into(PiecewiseQuasiPolynomial)] cardinality, isl_map_card);
+    isl_transform!(add_constraint, isl_map_add_constraint, [managed] constraint: Constraint<'a>);
 }
 
 #[cfg(test)]
