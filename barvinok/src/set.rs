@@ -146,6 +146,10 @@ impl<'a> Set<'a> {
     isl_ctor!([ctx] from_str, isl_set_read_from_str, [str] str : &str);
     isl_transform!(add_constraint, isl_set_add_constraint, [managed] constraint : Constraint<'a>);
     isl_transform!([into(PiecewiseQuasiPolynomial)] cardinality, isl_set_card);
+    isl_transform!([into(Map)] lex_lt_map, isl_set_lex_lt_set, [managed] set: Set<'a>);
+    isl_transform!([into(Map)] lex_le_map, isl_set_lex_le_set, [managed] set: Set<'a>);
+    isl_transform!([into(Map)] lex_ge_map, isl_set_lex_ge_set, [managed] set: Set<'a>);
+    isl_transform!([into(Map)] lex_gt_map, isl_set_lex_gt_set, [managed] set: Set<'a>);
 }
 
 impl PartialEq for BasicSet<'_> {
