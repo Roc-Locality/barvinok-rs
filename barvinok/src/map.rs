@@ -79,6 +79,10 @@ impl<'a> Map<'a> {
     isl_ctor!(lex_le, isl_map_lex_le, space: Space<'a>);
     isl_ctor!(lex_ge, isl_map_lex_ge, space: Space<'a>);
     isl_ctor!(lex_gt, isl_map_lex_gt, space: Space<'a>);
+    isl_transform!(lex_lt_map, isl_map_lex_lt_map, [managed] map: Map<'a>);
+    isl_transform!(lex_le_map, isl_map_lex_le_map, [managed] map: Map<'a>);
+    isl_transform!(lex_ge_map, isl_map_lex_ge_map, [managed] map: Map<'a>);
+    isl_transform!(lex_gt_map, isl_map_lex_gt_map, [managed] map: Map<'a>);
     isl_ctor!(lex_lt_first, isl_map_lex_lt_first, space: Space<'a>, [trivial] first: u32);
     isl_ctor!(lex_le_first, isl_map_lex_le_first, space: Space<'a>, [trivial] first: u32);
     isl_ctor!(lex_ge_first, isl_map_lex_ge_first, space: Space<'a>, [trivial] first: u32);
