@@ -107,6 +107,9 @@ impl<'a> ContextRef<'a> {
     pub fn set_max_operations(&self, max_operations: usize) {
         unsafe { barvinok_sys::isl_ctx_set_max_operations(self.0.as_ptr(), max_operations as u64) }
     }
+    pub fn get_max_operations(&self) -> usize {
+        unsafe { barvinok_sys::isl_ctx_get_max_operations(self.0.as_ptr()) as usize }
+    }
     pub fn reset_operations(&self) {
         unsafe { barvinok_sys::isl_ctx_reset_operations(self.0.as_ptr()) }
     }
@@ -145,6 +148,34 @@ impl Context {
         let ctx = nonnull_or_alloc_error(ctx);
 
         Self(ctx)
+    }
+    /// # Safety
+    /// This function is for using ISL's original parsing method.
+    pub unsafe fn from_args<'a>(args: impl Iterator<Item = &'a str>) -> Result<Self> {
+        let def = unsafe { &barvinok_sys::barvinok_options_args as *const _ as *mut _ };
+        let options = unsafe { barvinok_sys::barvinok_options_new_with_defaults() };
+        let ctx = unsafe { barvinok_sys::isl_ctx_alloc_with_options(def, options as _) };
+        let this = std::env::current_exe()
+            .map(|x| x.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let this = std::ffi::CString::new(this)?.into_raw();
+        let argv = [Ok(this)]
+            .into_iter()
+            .chain(args.map(|arg| {
+                let cstr = std::ffi::CString::new(arg)?;
+                Ok(cstr.into_raw())
+            }))
+            .collect::<Result<Vec<_>>>()?;
+        let argc = argv.len() as i32;
+        unsafe {
+            barvinok_sys::isl_ctx_parse_options(ctx, argc, argv.as_ptr() as _, 3);
+            isl_options_set_on_error(ctx, 1);
+        };
+        for arg in argv {
+            unsafe { drop(std::ffi::CString::from_raw(arg)) };
+        }
+        let ctx = nonnull_or_alloc_error(ctx);
+        Ok(Self(ctx))
     }
     pub fn scope<F, T>(&self, f: F) -> T
     where
@@ -505,7 +536,7 @@ mod tests {
         //     for j in 0 .. i
         //         for k in 0 .. j
         //            access A[k]
-        let ctx = Context::new();
+        let ctx = unsafe { Context::from_args(["--verbose"].into_iter())? };
         ctx.scope(|ctx| {
             let space = Space::set(ctx, 1, 3)?;
             let local_space = LocalSpace::try_from(space.clone())?;
@@ -585,5 +616,10 @@ mod tests {
             })?;
             Ok(())
         })
+    }
+
+    #[test]
+    fn test_from_args() {
+        unsafe { Context::from_args(["--verbose"].into_iter()).unwrap() };
     }
 }
