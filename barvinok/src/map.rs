@@ -160,6 +160,7 @@ impl<'a> Map<'a> {
     isl_transform!(add_constraint, isl_map_add_constraint, [managed] constraint: Constraint<'a>);
     isl_transform!([into(Set)] domain, isl_map_domain);
     isl_transform!([into(Set)] range, isl_map_range);
+    isl_transform!(set_dim_name, isl_map_set_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [str] name: &str);
 }
 
 #[cfg(test)]
