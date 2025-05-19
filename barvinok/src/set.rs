@@ -1,4 +1,4 @@
-use std::{mem::ManuallyDrop, ptr::NonNull};
+use std::{cell::Cell, mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{
     DimType,
@@ -7,6 +7,7 @@ use crate::{
     impl_isl_handle, isl_ctor, isl_flag, isl_project, isl_size, isl_str, isl_transform,
     list::List,
     map::{BasicMap, Map},
+    point::Point,
     polynomial::PiecewiseQuasiPolynomial,
     space::Space,
     stat::{isl_bool_to_optional_bool, isl_size_to_optional_u32},
@@ -150,6 +151,55 @@ impl<'a> Set<'a> {
     isl_transform!([into(Map)] lex_le_set, isl_set_lex_le_set, [managed] set: Set<'a>);
     isl_transform!([into(Map)] lex_ge_set, isl_set_lex_ge_set, [managed] set: Set<'a>);
     isl_transform!([into(Map)] lex_gt_set, isl_set_lex_gt_set, [managed] set: Set<'a>);
+    pub fn foreach_point<F>(&self, func: F) -> Result<(), crate::Error>
+    where
+        F: FnMut(Point<'a>) -> Result<(), crate::Error>,
+    {
+        struct FuncWithState<F> {
+            func: F,
+            state: Cell<Result<(), crate::Error>>,
+        }
+        let mut func = FuncWithState {
+            func,
+            state: Cell::new(Ok(())),
+        };
+        unsafe extern "C" fn callback<'a, F>(
+            point: *mut barvinok_sys::isl_point,
+            user: *mut std::ffi::c_void,
+        ) -> barvinok_sys::isl_stat
+        where
+            F: FnMut(Point<'a>) -> Result<(), crate::Error>,
+        {
+            let data = unsafe { &mut *(user as *mut FuncWithState<F>) };
+            let point = Point {
+                handle: NonNull::new(point).unwrap(),
+                marker: std::marker::PhantomData,
+            };
+            let state = data.state.replace(Ok(()));
+            data.state.set(state.and_then(|_| (data.func)(point)));
+            if data.state.get_mut().is_ok() {
+                barvinok_sys::isl_stat_isl_stat_ok
+            } else {
+                barvinok_sys::isl_stat_isl_stat_error
+            }
+        }
+        let handle = self.handle.as_ptr();
+        let res = unsafe {
+            barvinok_sys::isl_set_foreach_point(
+                handle,
+                Some(callback::<F>),
+                &mut func as *mut FuncWithState<F> as *mut std::ffi::c_void,
+            )
+        };
+        if res == barvinok_sys::isl_stat_isl_stat_ok {
+            func.state.into_inner()
+        } else {
+            match func.state.into_inner() {
+                Ok(()) => Err(self.context_ref().last_error_or_unknown().into()),
+                Err(e) => Err(e),
+            }
+        }
+    }
 }
 
 impl PartialEq for BasicSet<'_> {

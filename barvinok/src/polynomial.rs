@@ -49,6 +49,7 @@ impl<'a> QuasiPolynomial<'a> {
     isl_transform!(gist, isl_qpolynomial_gist, [managed] set: Set<'a>);
     isl_transform!(gist_params, isl_qpolynomial_gist_params, [managed] set: Set<'a>);
     isl_flag!(qpolynomial_involves_dims => involves_dims, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [trivial] num: u32);
+    isl_transform!([into(Value)] eval, isl_qpolynomial_eval, [managed] point: Point<'a>);
     pub fn foreach_term<F>(&self, func: F) -> Result<(), crate::Error>
     where
         F: FnMut(Term<'a>) -> Result<(), crate::Error>,
