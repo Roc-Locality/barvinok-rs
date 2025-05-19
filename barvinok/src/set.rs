@@ -151,6 +151,7 @@ impl<'a> Set<'a> {
     isl_transform!([into(Map)] lex_le_set, isl_set_lex_le_set, [managed] set: Set<'a>);
     isl_transform!([into(Map)] lex_ge_set, isl_set_lex_ge_set, [managed] set: Set<'a>);
     isl_transform!([into(Map)] lex_gt_set, isl_set_lex_gt_set, [managed] set: Set<'a>);
+    isl_transform!(insert_dims, isl_set_insert_dims, [cast(u32)] ty : DimType, [trivial] pos : u32, [trivial] num : u32);
     pub fn foreach_point<F>(&self, func: F) -> Result<(), crate::Error>
     where
         F: FnMut(Point<'a>) -> Result<(), crate::Error>,
