@@ -10,7 +10,7 @@ use crate::space::Space;
 use crate::stat::isl_bool_to_optional_bool;
 use crate::value::Value;
 use crate::{DimType, constraint::Constraint, impl_isl_handle, stat::isl_size_to_optional_u32};
-use crate::{isl_ctor, isl_flag, isl_project, isl_size, isl_transform};
+use crate::{isl_ctor, isl_flag, isl_project, isl_size, isl_str, isl_transform};
 
 impl_isl_handle!(Map, map);
 impl_isl_handle!(BasicMap, basic_map);
@@ -161,6 +161,8 @@ impl<'a> Map<'a> {
     isl_transform!([into(Set)] domain, isl_map_domain);
     isl_transform!([into(Set)] range, isl_map_range);
     isl_transform!(set_dim_name, isl_map_set_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [str] name: &str);
+    isl_flag!(map_has_dim_name => has_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32);
+    isl_str!(map_get_dim_name => get_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32);
 }
 
 #[cfg(test)]

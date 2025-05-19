@@ -20,6 +20,9 @@ impl<'a> Space<'a> {
     isl_str!(space_get_tuple_name => get_tuple_name, [cast(u32)] dim_type: DimType);
     isl_transform!(add_dims, isl_space_add_dims, [cast(u32)] dim_type: DimType, [trivial] num: u32);
     isl_size!(space_dim => get_dim, [cast(u32)] dim_type: DimType);
+    isl_str!(space_get_dim_name => get_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32);
+    isl_transform!(set_dim_name, isl_space_set_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [str] name: &str);
+    isl_flag!(space_has_dim_name => has_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32);
 }
 
 #[cfg(test)]
