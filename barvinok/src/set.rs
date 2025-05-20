@@ -152,6 +152,7 @@ impl<'a> Set<'a> {
     isl_transform!([into(Map)] lex_ge_set, isl_set_lex_ge_set, [managed] set: Set<'a>);
     isl_transform!([into(Map)] lex_gt_set, isl_set_lex_gt_set, [managed] set: Set<'a>);
     isl_transform!(insert_dims, isl_set_insert_dims, [cast(u32)] ty : DimType, [trivial] pos : u32, [trivial] num : u32);
+    isl_transform!(remove_dims, isl_set_remove_dims, [cast(u32)] ty : DimType, [trivial] first : u32, [trivial] num : u32);
     pub fn foreach_point<F>(&self, func: F) -> Result<(), crate::Error>
     where
         F: FnMut(Point<'a>) -> Result<(), crate::Error>,
@@ -378,6 +379,15 @@ mod test {
             list.push(basic_set2);
             let intersected_set = list.intersect();
             println!("{:?}", intersected_set);
+        });
+    }
+    #[test]
+    fn test_dim_removal() {
+        let ctx = Context::new();
+        ctx.scope(|ctx| {
+            let set = Set::from_str(ctx, "[R] -> { [i] : 0 <= i <= 10 and R >= 5 }").unwrap();
+            let set = set.remove_dims(DimType::Param, 0, 1).unwrap();
+            println!("{:?}", set);
         });
     }
     #[test]
