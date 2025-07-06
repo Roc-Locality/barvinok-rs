@@ -163,6 +163,7 @@ impl<'a> Map<'a> {
     isl_transform!(set_dim_name, isl_map_set_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32, [str] name: &str);
     isl_flag!(map_has_dim_name => has_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32);
     isl_str!(map_get_dim_name => get_dim_name, [cast(u32)] dim_type: DimType, [trivial] pos: u32);
+    isl_ctor!([ctx] from_str, isl_map_read_from_str, [str] str : &str);
 }
 
 #[cfg(test)]
