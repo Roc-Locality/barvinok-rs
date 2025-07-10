@@ -1,3 +1,4 @@
+use crate::aff::Affine;
 use crate::isl_ctor;
 use crate::point::Point;
 use crate::{DimType, space::Space};
@@ -372,6 +373,7 @@ impl<'a> std::ops::Neg for PiecewiseQuasiPolynomial<'a> {
 impl<'a> Term<'a> {
     isl_size!(term_dim => dim, [cast(u32)] dim_type: DimType);
     isl_size!(term_get_exp => exponent, [cast(u32)] dim_type: DimType, [trivial] pos: u32);
+    isl_project!([into(Affine)] get_div, isl_term_get_div, [trivial] pos: u32);
     isl_project!([into(Value)] coefficient, isl_term_get_coefficient_val);
 }
 
