@@ -1,0 +1,11 @@
+[package]
+name = "barvinok-gen"
+version = "0.1.0-alpha.1"
+edition = "2024"
+
+[dependencies]
+prettyplease = "0.2.32"
+proc-macro2 = "1.0.95"
+quote = "1.0.40"
+regex = "1.11.1"
+syn = { version = "2.0.100", features = ["full", "parsing"] }

@@ -1,90 +1,14 @@
+use std::mem::ManuallyDrop;
+
 use num_traits::PrimInt;
 
-use crate::{
-    ContextRef, impl_isl_handle, nonnull_or_alloc_error,
-    stat::{ContextResult, isl_bool_to_optional_bool},
-};
-
-use std::mem::ManuallyDrop;
+use crate::{ContextRef, impl_isl_handle, nonnull_or_alloc_error};
 
 impl_isl_handle!(Value, val);
 
-macro_rules! isl_val_new {
-    ($name:ident, $func:ident $(, $arg_name:ident : $arg_ty:ty)*) => {
-        pub fn $name(ctx: ContextRef<'a> $(, $arg_name: $arg_ty)*) -> Self {
-            let handle = unsafe { barvinok_sys::$func(ctx.0.as_ptr() $(, $arg_name)*) };
-            let handle = nonnull_or_alloc_error(handle);
-            Self {
-                handle,
-                marker: std::marker::PhantomData,
-            }
-        }
-    };
-}
-
-macro_rules! impl_special_val_check {
-    ($method:ident, $isl_fn:ident) => {
-        pub fn $method(&self) -> Option<bool> {
-            let flag = unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr()) };
-            isl_bool_to_optional_bool(flag)
-        }
-    };
-}
-
-macro_rules! impl_unary_method {
-    ($method:ident, $isl_fn:ident) => {
-        pub fn $method(self) -> Self {
-            let this = ManuallyDrop::new(self);
-            let handle = unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr()) };
-            let handle = nonnull_or_alloc_error(handle);
-            Self {
-                handle,
-                marker: std::marker::PhantomData,
-            }
-        }
-    };
-}
-
-macro_rules! impl_binary_method {
-    ($method:ident, $isl_fn:ident) => {
-        pub fn $method(self, other: Self) -> Self {
-            let this = ManuallyDrop::new(self);
-            let other = ManuallyDrop::new(other);
-            let handle =
-                unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr(), other.handle.as_ptr()) };
-            let handle = nonnull_or_alloc_error(handle);
-            Self {
-                handle,
-                marker: std::marker::PhantomData,
-            }
-        }
-    };
-}
-
-macro_rules! impl_binary_method_ui {
-    ($method:ident, $isl_fn:ident) => {
-        pub fn $method(self, val: u64) -> Self {
-            let this = ManuallyDrop::new(self);
-            let handle = unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr(), val) };
-            let handle = nonnull_or_alloc_error(handle);
-            Self {
-                handle,
-                marker: std::marker::PhantomData,
-            }
-        }
-    };
-}
+include!(concat!(env!("OUT_DIR"), "/generated/value.rs"));
 
 impl<'a> Value<'a> {
-    isl_val_new!(new_zero, isl_val_zero);
-    isl_val_new!(new_one, isl_val_one);
-    isl_val_new!(new_negone, isl_val_negone);
-    isl_val_new!(new_nan, isl_val_nan);
-    isl_val_new!(new_infty, isl_val_infty);
-    isl_val_new!(new_neg_infty, isl_val_neginfty);
-    isl_val_new!(new_si, isl_val_int_from_si, value: i64);
-    isl_val_new!(new_ui, isl_val_int_from_ui, value: u64);
-
     pub fn new_chunks<T: PrimInt>(ctx: ContextRef<'a>, value: &[T]) -> Self {
         let handle = unsafe {
             barvinok_sys::isl_val_int_from_chunks(
@@ -109,135 +33,42 @@ impl<'a> Value<'a> {
         unsafe { barvinok_sys::isl_val_get_den_si(self.handle.as_ptr()) }
     }
 
-    pub fn new_from_string(ctx: ContextRef<'a>, value: &str) -> crate::Result<Self> {
-        let cstr = std::ffi::CString::new(value).map_err(|_| crate::Error::ParseError)?;
-        let handle = unsafe { barvinok_sys::isl_val_read_from_str(ctx.0.as_ptr(), cstr.as_ptr()) };
-        if handle.is_null() {
-            return Err(crate::Error::ParseError);
-        }
-        let handle = nonnull_or_alloc_error(handle);
-        Ok(Self {
-            handle,
-            marker: std::marker::PhantomData,
-        })
-    }
-
-    pub fn denominator_value(&self) -> Self {
-        let handle = unsafe { barvinok_sys::isl_val_get_den_val(self.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Self {
-            handle,
-            marker: std::marker::PhantomData,
-        }
-    }
-
     pub fn to_f64(&self) -> f64 {
         unsafe { barvinok_sys::isl_val_get_d(self.handle.as_ptr()) }
     }
 
-    pub fn abs_eq(&self, other: &Self) -> Option<bool> {
-        let flag =
-            unsafe { barvinok_sys::isl_val_abs_eq(self.handle.as_ptr(), other.handle.as_ptr()) };
-        isl_bool_to_optional_bool(flag)
-    }
-    pub fn divisible_by(&self, other: &Self) -> Option<bool> {
-        let flag = unsafe {
-            barvinok_sys::isl_val_is_divisible_by(self.handle.as_ptr(), other.handle.as_ptr())
-        };
-        isl_bool_to_optional_bool(flag)
-    }
-
-    impl_special_val_check!(is_zero, isl_val_is_zero);
-    impl_special_val_check!(is_one, isl_val_is_one);
-    impl_special_val_check!(is_negone, isl_val_is_negone);
-    impl_special_val_check!(is_nan, isl_val_is_nan);
-    impl_special_val_check!(is_infty, isl_val_is_infty);
-    impl_special_val_check!(is_neg_infty, isl_val_is_neginfty);
-    impl_special_val_check!(is_nonneg, isl_val_is_nonneg);
-    impl_special_val_check!(is_nonpos, isl_val_is_nonpos);
-    impl_special_val_check!(is_int, isl_val_is_int);
-    impl_special_val_check!(is_rat, isl_val_is_rat);
-
-    pub fn gt_si(&self, value: i64) -> Option<bool> {
-        let flag = unsafe { barvinok_sys::isl_val_gt_si(self.handle.as_ptr(), value) };
-        isl_bool_to_optional_bool(flag)
-    }
-    pub fn eq_si(&self, value: i64) -> Option<bool> {
-        let flag = unsafe { barvinok_sys::isl_val_eq_si(self.handle.as_ptr(), value) };
-        isl_bool_to_optional_bool(flag)
-    }
     pub fn cmp_si(&self, value: i64) -> Option<std::cmp::Ordering> {
-        if self.is_nan()? {
-            return None;
-        }
-        let int_val = unsafe { barvinok_sys::isl_val_cmp_si(self.handle.as_ptr(), value) };
-        match int_val.cmp(&0) {
-            std::cmp::Ordering::Greater => Some(std::cmp::Ordering::Greater),
-            std::cmp::Ordering::Less => Some(std::cmp::Ordering::Less),
-            std::cmp::Ordering::Equal => Some(std::cmp::Ordering::Equal),
+        if !self.is_nan().ok()? {
+            let int_val = unsafe { barvinok_sys::isl_val_cmp_si(self.handle.as_ptr(), value) };
+            Some(int_val.cmp(&0))
+        } else {
+            None
         }
     }
-    impl_unary_method!(abs, isl_val_abs);
-    impl_unary_method!(floor, isl_val_floor);
-    impl_unary_method!(ceil, isl_val_ceil);
-    impl_unary_method!(trunc, isl_val_trunc);
-    impl_unary_method!(inv, isl_val_inv);
-    impl_binary_method!(min, isl_val_min);
-    impl_binary_method!(max, isl_val_max);
-
-    impl_binary_method_ui!(add_ui, isl_val_add_ui);
-    impl_binary_method_ui!(sub_ui, isl_val_sub_ui);
-    impl_binary_method_ui!(mul_ui, isl_val_mul_ui);
-    impl_binary_method_ui!(div_ui, isl_val_div_ui);
 
     pub fn checked_exp2(self) -> crate::Result<Self> {
-        if !self.is_int().context_result(self.context_ref())? {
+        if !self.is_int()? {
             return Err(crate::Error::NonIntegralValue);
         }
-        let this = ManuallyDrop::new(self);
-        let handle = unsafe { barvinok_sys::isl_val_pow2(this.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Ok(Self {
-            handle,
-            marker: std::marker::PhantomData,
-        })
+        self.pow2()
     }
+
     pub fn checked_rem(self, other: Self) -> crate::Result<Self> {
-        if !self.is_int().context_result(self.context_ref())?
-            || !other.is_int().context_result(self.context_ref())?
-        {
+        if !self.is_int()? || !other.is_int()? {
             return Err(crate::Error::NonIntegralValue);
         }
-        let this = ManuallyDrop::new(self);
-        let other = ManuallyDrop::new(other);
-        let handle =
-            unsafe { barvinok_sys::isl_val_mod(this.handle.as_ptr(), other.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Ok(Self {
-            handle,
-            marker: std::marker::PhantomData,
-        })
+        self.modulo(other)
     }
+
     pub fn checked_gcd(self, other: Self) -> crate::Result<Self> {
-        if !self.is_int().context_result(self.context_ref())?
-            || !other.is_int().context_result(self.context_ref())?
-        {
+        if !self.is_int()? || !other.is_int()? {
             return Err(crate::Error::NonIntegralValue);
         }
-        let this = ManuallyDrop::new(self);
-        let other = ManuallyDrop::new(other);
-        let handle =
-            unsafe { barvinok_sys::isl_val_gcd(this.handle.as_ptr(), other.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Ok(Self {
-            handle,
-            marker: std::marker::PhantomData,
-        })
+        self.gcd(other)
     }
+
     pub fn checked_exgcd(self, other: Self) -> crate::Result<(Self, Self, Self)> {
-        if !self.is_int().context_result(self.context_ref())?
-            || !other.is_int().context_result(self.context_ref())?
-        {
+        if !self.is_int()? || !other.is_int()? {
             return Err(crate::Error::NonIntegralValue);
         }
         let mut x = std::ptr::null_mut();
@@ -255,19 +86,20 @@ impl<'a> Value<'a> {
         let handle = nonnull_or_alloc_error(handle);
         let x = nonnull_or_alloc_error(x);
         let y = nonnull_or_alloc_error(y);
-        let gcd = Value {
-            handle,
-            marker: std::marker::PhantomData,
-        };
-        let x = Value {
-            handle: x,
-            marker: std::marker::PhantomData,
-        };
-        let y = Value {
-            handle: y,
-            marker: std::marker::PhantomData,
-        };
-        Ok((gcd, x, y))
+        Ok((
+            Value {
+                handle,
+                marker: std::marker::PhantomData,
+            },
+            Value {
+                handle: x,
+                marker: std::marker::PhantomData,
+            },
+            Value {
+                handle: y,
+                marker: std::marker::PhantomData,
+            },
+        ))
     }
 }
 
@@ -278,83 +110,65 @@ impl From<Value<'_>> for f64 {
 }
 
 macro_rules! impl_cmp_method {
-    ($method:ident, $isl_fn:ident) => {
+    ($method:ident) => {
         fn $method(&self, other: &Self) -> bool {
-            let flag =
-                unsafe { barvinok_sys::$isl_fn(self.handle.as_ptr(), other.handle.as_ptr()) };
-            isl_bool_to_optional_bool(flag)
-                .context_result(self.context_ref())
-                .unwrap()
+            Value::$method(self, other).unwrap()
         }
     };
 }
 
 #[allow(clippy::partialeq_ne_impl)]
 impl PartialEq for Value<'_> {
-    impl_cmp_method!(eq, isl_val_eq);
-    impl_cmp_method!(ne, isl_val_ne);
+    impl_cmp_method!(eq);
+    impl_cmp_method!(ne);
 }
 
 impl PartialOrd for Value<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.lt(other) {
+        if Value::lt(self, other).ok()? {
             Some(std::cmp::Ordering::Less)
-        } else if self.eq(other) {
+        } else if Value::eq(self, other).ok()? {
             Some(std::cmp::Ordering::Equal)
-        } else if self.gt(other) {
+        } else if Value::gt(self, other).ok()? {
             Some(std::cmp::Ordering::Greater)
         } else {
             None
         }
     }
 
-    impl_cmp_method!(ge, isl_val_ge);
-    impl_cmp_method!(le, isl_val_le);
-    impl_cmp_method!(gt, isl_val_gt);
-    impl_cmp_method!(lt, isl_val_lt);
+    impl_cmp_method!(ge);
+    impl_cmp_method!(le);
+    impl_cmp_method!(gt);
+    impl_cmp_method!(lt);
 }
 
 impl<'a> std::ops::Neg for Value<'a> {
     type Output = Value<'a>;
+
     fn neg(self) -> Self::Output {
-        let this = ManuallyDrop::new(self);
-        let handle = unsafe { barvinok_sys::isl_val_neg(this.handle.as_ptr()) };
-        let handle = nonnull_or_alloc_error(handle);
-        Value {
-            handle,
-            marker: std::marker::PhantomData,
-        }
+        Value::neg(self).unwrap()
     }
 }
 
 macro_rules! impl_bin_op {
-    ($trait:ident, $method:ident, $isl_fn:ident) => {
+    ($trait:ident, $method:ident) => {
         impl<'a> std::ops::$trait for Value<'a> {
             type Output = Value<'a>;
+
             fn $method(self, other: Self) -> Self::Output {
-                let this = ManuallyDrop::new(self);
-                let other = ManuallyDrop::new(other);
-                let handle =
-                    unsafe { barvinok_sys::$isl_fn(this.handle.as_ptr(), other.handle.as_ptr()) };
-                let handle = nonnull_or_alloc_error(handle);
-                Value {
-                    handle,
-                    marker: std::marker::PhantomData,
-                }
+                Value::$method(self, other).unwrap()
             }
         }
     };
 }
 
-impl_bin_op!(Add, add, isl_val_add);
-impl_bin_op!(Sub, sub, isl_val_sub);
-impl_bin_op!(Mul, mul, isl_val_mul);
-impl_bin_op!(Div, div, isl_val_div);
+impl_bin_op!(Add, add);
+impl_bin_op!(Sub, sub);
+impl_bin_op!(Mul, mul);
+impl_bin_op!(Div, div);
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Neg;
-
     use super::*;
     use crate::Context;
 
@@ -362,7 +176,7 @@ mod tests {
     fn test_value() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val = Value::new_si(ctx, 42);
+            let val = Value::int_from_si(ctx, 42).unwrap();
             assert_eq!(val.numerator(), 42);
             assert_eq!(val.denominator(), 1);
             assert_eq!(val.to_f64(), 42.0);
@@ -373,7 +187,7 @@ mod tests {
     fn test_value_clone() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val = Value::new_si(ctx, 42);
+            let val = Value::int_from_si(ctx, 42).unwrap();
             let val_clone = val.clone();
             assert_eq!(val_clone.numerator(), 42);
             assert_eq!(val_clone.denominator(), 1);
@@ -394,8 +208,8 @@ mod tests {
     fn test_value_abs_eq() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val1 = Value::new_si(ctx, 42);
-            let val2 = Value::new_si(ctx, -42);
+            let val1 = Value::int_from_si(ctx, 42).unwrap();
+            let val2 = Value::int_from_si(ctx, -42).unwrap();
             assert!(val1.abs_eq(&val2).unwrap());
         });
     }
@@ -404,8 +218,8 @@ mod tests {
     fn test_value_cmp() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val1 = Value::new_si(ctx, 42);
-            let val2 = Value::new_si(ctx, 43);
+            let val1 = Value::int_from_si(ctx, 42).unwrap();
+            let val2 = Value::int_from_si(ctx, 43).unwrap();
             assert!(val1 < val2);
             assert!(val1 <= val2);
             assert!(val2 > val1);
@@ -420,29 +234,28 @@ mod tests {
     fn test_value_special() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val_zero = Value::new_zero(ctx);
-            let val_one = Value::new_one(ctx);
-            let val_negone = Value::new_negone(ctx);
-            let val_nan = Value::new_nan(ctx);
-            let val_infty = Value::new_infty(ctx);
-            let val_neg_infty = Value::new_neg_infty(ctx);
+            let val_zero = Value::zero(ctx).unwrap();
+            let val_one = Value::one(ctx).unwrap();
+            let val_negone = Value::negone(ctx).unwrap();
+            let val_nan = Value::nan(ctx).unwrap();
+            let val_infty = Value::infty(ctx).unwrap();
+            let val_neg_infty = Value::neginfty(ctx).unwrap();
 
             assert!(val_zero.is_zero().unwrap());
             assert!(val_one.is_one().unwrap());
             assert!(val_negone.is_negone().unwrap());
             assert!(val_nan.is_nan().unwrap());
             assert!(val_infty.is_infty().unwrap());
-            assert!(val_neg_infty.is_neg_infty().unwrap());
+            assert!(val_neg_infty.is_neginfty().unwrap());
 
-            // some random cross checkings
             assert!(!val_zero.is_one().unwrap());
             assert!(!val_one.is_zero().unwrap());
             assert!(!val_zero.is_nan().unwrap());
             assert!(!val_one.is_nan().unwrap());
             assert!(!val_zero.is_infty().unwrap());
             assert!(!val_one.is_infty().unwrap());
-            assert!(!val_zero.is_neg_infty().unwrap());
-            assert!(!val_one.is_neg_infty().unwrap());
+            assert!(!val_zero.is_neginfty().unwrap());
+            assert!(!val_one.is_neginfty().unwrap());
             assert!(!val_nan.is_zero().unwrap());
         });
     }
@@ -451,10 +264,10 @@ mod tests {
     fn test_value_divisible_by() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val1 = Value::new_si(ctx, 42);
-            let val2 = Value::new_si(ctx, 7);
-            assert!(val1.divisible_by(&val2).unwrap());
-            assert!(!val2.divisible_by(&val1).unwrap());
+            let val1 = Value::int_from_si(ctx, 42).unwrap();
+            let val2 = Value::int_from_si(ctx, 7).unwrap();
+            assert!(val1.is_divisible_by(&val2).unwrap());
+            assert!(!val2.is_divisible_by(&val1).unwrap());
         });
     }
 
@@ -462,7 +275,7 @@ mod tests {
     fn test_value_cmp_si() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val = Value::new_si(ctx, 42);
+            let val = Value::int_from_si(ctx, 42).unwrap();
             assert_eq!(val.cmp_si(42), Some(std::cmp::Ordering::Equal));
             assert_eq!(val.cmp_si(43), Some(std::cmp::Ordering::Less));
             assert_eq!(val.cmp_si(41), Some(std::cmp::Ordering::Greater));
@@ -474,13 +287,13 @@ mod tests {
     fn test_unary_methods() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val = Value::new_si(ctx, 42);
-            assert_eq!(val.clone().abs().to_f64(), 42.0);
-            assert_eq!(val.clone().floor().to_f64(), 42.0);
-            assert_eq!(val.clone().ceil().to_f64(), 42.0);
-            assert_eq!(val.clone().trunc().to_f64(), 42.0);
-            assert_eq!(val.clone().inv().to_f64(), 1.0 / 42.0);
-            assert_eq!(val.clone().neg().to_f64(), -42.0);
+            let val = Value::int_from_si(ctx, 42).unwrap();
+            assert_eq!(val.clone().abs().unwrap().to_f64(), 42.0);
+            assert_eq!(val.clone().floor().unwrap().to_f64(), 42.0);
+            assert_eq!(val.clone().ceil().unwrap().to_f64(), 42.0);
+            assert_eq!(val.clone().trunc().unwrap().to_f64(), 42.0);
+            assert_eq!(val.clone().inv().unwrap().to_f64(), 1.0 / 42.0);
+            assert_eq!(val.clone().neg().unwrap().to_f64(), -42.0);
         });
     }
 
@@ -488,8 +301,8 @@ mod tests {
     fn test_binary_methods() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val1 = Value::new_si(ctx, 42);
-            let val2 = Value::new_si(ctx, 7);
+            let val1 = Value::int_from_si(ctx, 42).unwrap();
+            let val2 = Value::int_from_si(ctx, 7).unwrap();
             assert_eq!((val1.clone() + val2.clone()).to_f64(), 49.0);
             assert_eq!((val1.clone() - val2.clone()).to_f64(), 35.0);
             assert_eq!((val1.clone() * val2.clone()).to_f64(), 294.0);
@@ -501,11 +314,11 @@ mod tests {
     fn test_binary_methods_ui() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val1 = Value::new_si(ctx, 42);
-            assert_eq!(val1.clone().add_ui(7).to_f64(), 49.0);
-            assert_eq!(val1.clone().sub_ui(7).to_f64(), 35.0);
-            assert_eq!(val1.clone().mul_ui(7).to_f64(), 294.0);
-            assert_eq!(val1.clone().div_ui(7).to_f64(), 6.0);
+            let val1 = Value::int_from_si(ctx, 42).unwrap();
+            assert_eq!(val1.clone().add_ui(7).unwrap().to_f64(), 49.0);
+            assert_eq!(val1.clone().sub_ui(7).unwrap().to_f64(), 35.0);
+            assert_eq!(val1.clone().mul_ui(7).unwrap().to_f64(), 294.0);
+            assert_eq!(val1.clone().div_ui(7).unwrap().to_f64(), 6.0);
         });
     }
 
@@ -513,9 +326,9 @@ mod tests {
     fn test_val_exp2() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val = Value::new_nan(ctx);
+            let val = Value::nan(ctx).unwrap();
             assert!(val.checked_exp2().is_err());
-            let val = Value::new_si(ctx, 42);
+            let val = Value::int_from_si(ctx, 42).unwrap();
             let val = val.checked_exp2().unwrap();
             assert_eq!(val.to_f64(), 2.0f64.powi(42));
         });
@@ -525,8 +338,8 @@ mod tests {
     fn test_division_like_int_operations() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val1 = Value::new_si(ctx, 42);
-            let val2 = Value::new_si(ctx, 7);
+            let val1 = Value::int_from_si(ctx, 42).unwrap();
+            let val2 = Value::int_from_si(ctx, 7).unwrap();
             assert_eq!(
                 val1.clone().checked_rem(val2.clone()).unwrap().to_f64(),
                 0.0
@@ -546,9 +359,9 @@ mod tests {
     fn test_create_val_from_ctx_ref() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val = Value::new_si(ctx, 42);
+            let val = Value::int_from_si(ctx, 42).unwrap();
             let ctx_ref = val.context_ref();
-            let val2 = Value::new_si(ctx_ref, 42);
+            let val2 = Value::int_from_si(ctx_ref, 42).unwrap();
             assert_eq!(val2.numerator(), 42);
             assert_eq!(val2.denominator(), 1);
             let added = val + val2;
@@ -560,9 +373,9 @@ mod tests {
     fn test_print_inv() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val = Value::new_si(ctx, 42);
+            let val = Value::int_from_si(ctx, 42).unwrap();
             println!("val: {:?}", val);
-            let val_inv = val.clone().inv();
+            let val_inv = val.clone().inv().unwrap();
             println!("val_inv: {:?}", val_inv);
         });
     }
@@ -571,18 +384,18 @@ mod tests {
     fn test_new_from_string() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val = Value::new_from_string(ctx, "42").unwrap();
+            let val = Value::from_str(ctx, "42").unwrap();
             assert_eq!(val.numerator(), 42);
             assert_eq!(val.denominator(), 1);
             assert_eq!(val.to_f64(), 42.0);
 
-            let val = Value::new_from_string(ctx, "nan");
+            let val = Value::from_str(ctx, "nan");
             assert!(val.unwrap().is_nan().unwrap());
 
-            let val = Value::new_from_string(ctx, "infty");
+            let val = Value::from_str(ctx, "infty");
             assert!(val.unwrap().is_infty().unwrap());
 
-            let val = Value::new_from_string(ctx, "5/12").unwrap();
+            let val = Value::from_str(ctx, "5/12").unwrap();
             assert_eq!(val.numerator(), 5);
             assert_eq!(val.denominator(), 12);
         });
@@ -604,8 +417,8 @@ mod tests {
         let ctx = Context::new();
         ctx.scope(|ctx| {
             let mut val_list = ValueList::new(ctx, 9);
-            let val1 = Value::new_si(ctx, 42);
-            let val2 = Value::new_si(ctx, 7);
+            let val1 = Value::int_from_si(ctx, 42).unwrap();
+            let val2 = Value::int_from_si(ctx, 7).unwrap();
             val_list.push(val1);
             val_list.push(val2);
             println!("val_list: {:?}", val_list);

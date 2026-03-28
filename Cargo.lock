@@ -70,11 +70,31 @@ name = "barvinok"
 version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
+ "barvinok-gen",
+ "barvinok-macros",
  "barvinok-sys",
  "libc",
  "num-traits",
  "paste",
  "thiserror",
+]
+
+[[package]]
+name = "barvinok-gen"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn",
+]
+
+[[package]]
+name = "barvinok-macros"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "paste",
 ]
 
 [[package]]

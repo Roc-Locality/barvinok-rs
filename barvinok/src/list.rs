@@ -1,6 +1,6 @@
 use std::{ffi::c_char, mem::ManuallyDrop, ptr::NonNull};
 
-use crate::{ContextRef, nonnull_or_alloc_error, printer::ISLPrint};
+use crate::{ContextRef, FromRawIsl, nonnull_or_alloc_error, printer::ISLPrint};
 
 #[allow(clippy::missing_safety_doc)]
 pub trait ListRawAPI {
@@ -327,6 +327,17 @@ pub struct List<'a, T: ListRawAPI> {
     pub(crate) marker: std::marker::PhantomData<*mut &'a [&'a T]>,
 }
 
+impl<'a, T: ListRawAPI + 'a> FromRawIsl<'a> for List<'a, T> {
+    type Handle = T::ListHandle;
+
+    unsafe fn from_raw_nonnull(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<'a, T: ListRawAPI + 'a> List<'a, T> {
     pub fn new(ctx: ContextRef<'a>, capacity: usize) -> Self {
         let handle = unsafe { T::list_alloc(ctx.0.as_ptr(), capacity as i32) };
@@ -484,7 +495,7 @@ mod tests {
         ctx.scope(|ctx| {
             let mut list = List::<Value>::new(ctx, 10);
             assert_eq!(list.len(), 0);
-            let val = Value::new_ui(ctx, 42);
+            let val = Value::int_from_ui(ctx, 42).unwrap();
             list.push(val.clone() + val.clone());
             list.push(val.clone() * val.clone());
             list.push(val);
@@ -498,8 +509,8 @@ mod tests {
         let ctx = Context::new();
         ctx.scope(|ctx| {
             let mut list = List::<Value>::new(ctx, 10);
-            let val1 = Value::new_ui(ctx, 42);
-            let val2 = Value::new_ui(ctx, 43);
+            let val1 = Value::int_from_ui(ctx, 42).unwrap();
+            let val2 = Value::int_from_ui(ctx, 43).unwrap();
             list.push(val1.clone());
             list.push(val2.clone());
             assert!(list.get(0).unwrap() == val1);
@@ -513,13 +524,13 @@ mod tests {
         let ctx = Context::new();
         ctx.scope(|ctx| {
             let mut list = List::<Value>::new(ctx, 10);
-            let val1 = Value::new_ui(ctx, 42);
-            let val2 = Value::new_ui(ctx, 43);
+            let val1 = Value::int_from_ui(ctx, 42).unwrap();
+            let val2 = Value::int_from_ui(ctx, 43).unwrap();
             list.push(val1.clone());
             list.push(val2.clone());
             assert!(list.get(0).unwrap() == val1);
             assert!(list.get(1).unwrap() == val2);
-            let val3 = Value::new_ui(ctx, 44);
+            let val3 = Value::int_from_ui(ctx, 44).unwrap();
             list.set(0, val3.clone());
             assert!(list.get(0).unwrap() == val3);
         });

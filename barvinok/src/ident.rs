@@ -3,6 +3,8 @@ use std::{any::Any, ptr::NonNull};
 
 impl_isl_handle!(Ident, id);
 
+include!(concat!(env!("OUT_DIR"), "/generated/ident.rs"));
+
 type CastFn = fn(NonNull<std::ffi::c_void>) -> NonNull<dyn Any>;
 
 #[repr(C)]
@@ -78,11 +80,6 @@ impl<'a> Ident<'a> {
     pub fn get_user_as<T: Any>(&self) -> Option<&T> {
         self.get_user_ref()
             .and_then(|user_data| user_data.downcast_ref::<T>())
-    }
-    pub fn name(&self) -> Result<&str, crate::Error> {
-        let cstr = unsafe { barvinok_sys::isl_id_get_name(self.handle.as_ptr()) };
-        let cstr = unsafe { std::ffi::CStr::from_ptr(cstr) };
-        Ok(cstr.to_str()?)
     }
 }
 

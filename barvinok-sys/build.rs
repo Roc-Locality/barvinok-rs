@@ -65,6 +65,9 @@ fn main() {
         .allowlist_function("isl.*")
         .allowlist_function("barvinok.*")
         .allowlist_recursively(true)
+        // Layout assertions for transitive libc/internal types are not
+        // required for this FFI surface and are brittle across toolchains.
+        .layout_tests(false)
         // use core
         .use_core()
         // Finish the builder and generate the bindings.
