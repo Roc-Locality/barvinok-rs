@@ -137,26 +137,26 @@ fn generated_matrix_and_polynomial_surface() -> Result<()> {
     })
 }
 
-    #[test]
-    fn generated_piecewise_multi_and_union_surface() -> Result<()> {
-        let context = Context::new();
-        context.scope(|ctx| -> Result<()> {
-            let set_space = Space::set(ctx, 0, 1)?;
-            let set = barvinok::set::Set::universe(set_space.clone())?;
-            let pw_aff = PiecewiseAffine::val_on_domain(set.clone(), Value::one(ctx)?)?;
-            assert!(pw_aff.clone().domain()?.is_equal(&set)?);
+#[test]
+fn generated_piecewise_multi_and_union_surface() -> Result<()> {
+    let context = Context::new();
+    context.scope(|ctx| -> Result<()> {
+        let set_space = Space::set(ctx, 0, 1)?;
+        let set = barvinok::set::Set::universe(set_space.clone())?;
+        let pw_aff = PiecewiseAffine::val_on_domain(set.clone(), Value::one(ctx)?)?;
+        assert!(pw_aff.clone().domain()?.is_equal(&set)?);
 
-            let multi_pw_aff = MultiPiecewiseAffine::from_pw_aff(pw_aff.clone())?;
-            assert!(multi_pw_aff.clone().as_map()?.domain()?.is_equal(&set)?);
+        let multi_pw_aff = MultiPiecewiseAffine::from_pw_aff(pw_aff.clone())?;
+        assert!(multi_pw_aff.clone().as_map()?.domain()?.is_equal(&set)?);
 
-            let pw_multi_aff = PiecewiseMultiAffine::from_pw_aff(pw_aff.clone())?;
-            assert!(pw_multi_aff.clone().domain()?.is_equal(&set)?);
+        let pw_multi_aff = PiecewiseMultiAffine::from_pw_aff(pw_aff.clone())?;
+        assert!(pw_multi_aff.clone().domain()?.is_equal(&set)?);
 
-            let multi_aff = MultiAffine::domain_map(set_space.clone().map_from_set()?)?;
-            let pw_multi_from_multi = multi_aff.clone().to_pw_multi_aff()?;
-            let multi_pw_from_multi = multi_aff.clone().to_multi_pw_aff()?;
-            assert!(
-                multi_aff
+        let multi_aff = MultiAffine::domain_map(set_space.clone().map_from_set()?)?;
+        let pw_multi_from_multi = multi_aff.clone().to_pw_multi_aff()?;
+        let multi_pw_from_multi = multi_aff.clone().to_multi_pw_aff()?;
+        assert!(
+            multi_aff
                 .clone()
                 .as_map()?
                 .is_equal(&multi_pw_from_multi.clone().as_map()?)?
@@ -166,28 +166,32 @@ fn generated_matrix_and_polynomial_surface() -> Result<()> {
                 .clone()
                 .as_map()?
                 .is_equal(&multi_pw_from_multi.as_map()?)?
-            );
+        );
 
-            let union_set = UnionSet::from_set(set.clone())?;
-            assert_eq!(union_set.n_set()?, 1);
-            assert!(union_set.clone().as_set()?.is_equal(&set)?);
+        let union_set = UnionSet::from_set(set.clone())?;
+        assert_eq!(union_set.n_set()?, 1);
+        assert!(union_set.clone().as_set()?.is_equal(&set)?);
 
-            let union_pw_aff = UnionPiecewiseAffine::from_pw_aff(pw_aff)?;
-            assert!(union_pw_aff.clone().domain()?.is_equal(&union_set)?);
+        let union_pw_aff = UnionPiecewiseAffine::from_pw_aff(pw_aff)?;
+        assert!(union_pw_aff.clone().domain()?.is_equal(&union_set)?);
 
-            let union_pw_multi_aff =
-                UnionPiecewiseMultiAffine::from_union_pw_aff(union_pw_aff.clone())?;
-            let union_map = union_pw_multi_aff.clone().as_union_map()?;
-            assert!(union_map.clone().domain()?.is_equal(&union_set)?);
+        let union_pw_multi_aff =
+            UnionPiecewiseMultiAffine::from_union_pw_aff(union_pw_aff.clone())?;
+        let union_map = union_pw_multi_aff.clone().as_union_map()?;
+        assert!(union_map.clone().domain()?.is_equal(&union_set)?);
 
-            let roundtrip_union_pw_multi_aff = union_map.clone().as_union_pw_multi_aff()?;
-            assert!(roundtrip_union_pw_multi_aff.domain()?.is_equal(&union_set)?);
+        let roundtrip_union_pw_multi_aff = union_map.clone().as_union_pw_multi_aff()?;
+        assert!(
+            roundtrip_union_pw_multi_aff
+                .domain()?
+                .is_equal(&union_set)?
+        );
 
-            let multi_union_pw_aff = union_map.as_multi_union_pw_aff()?;
-            assert!(multi_union_pw_aff.domain()?.is_equal(&union_set)?);
+        let multi_union_pw_aff = union_map.as_multi_union_pw_aff()?;
+        assert!(multi_union_pw_aff.domain()?.is_equal(&union_set)?);
 
-            let union_map_from_map = UnionMap::from_map(pw_multi_aff.as_map()?)?;
-            assert!(union_map_from_map.domain()?.as_set()?.is_equal(&set)?);
-            Ok(())
-        })
+        let union_map_from_map = UnionMap::from_map(pw_multi_aff.as_map()?)?;
+        assert!(union_map_from_map.domain()?.as_set()?.is_equal(&set)?);
+        Ok(())
+    })
 }

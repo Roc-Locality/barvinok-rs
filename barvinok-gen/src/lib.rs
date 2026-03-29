@@ -328,10 +328,14 @@ const TYPE_CONFIGS: &[TypeConfig] = &[
 
 const C_TO_RUST: &[(&str, &str)] = &[
     ("aff", "Affine"),
+    ("aff_list", "AffineList"),
     ("basic_map", "BasicMap"),
     ("basic_set", "BasicSet"),
+    ("basic_set_list", "BasicSetList"),
     ("constraint", "Constraint"),
+    ("constraint_list", "ConstraintList"),
     ("id", "Ident"),
+    ("id_list", "IdentList"),
     ("local_space", "LocalSpace"),
     ("map", "Map"),
     ("mat", "Matrix"),
@@ -342,16 +346,20 @@ const C_TO_RUST: &[(&str, &str)] = &[
     ("multi_val", "MultiValue"),
     ("point", "Point"),
     ("pw_aff", "PiecewiseAffine"),
+    ("pw_aff_list", "PiecewiseAffineList"),
     ("pw_multi_aff", "PiecewiseMultiAffine"),
     ("pw_qpolynomial", "PiecewiseQuasiPolynomial"),
     ("qpolynomial", "QuasiPolynomial"),
     ("set", "Set"),
+    ("set_list", "SetList"),
     ("space", "Space"),
     ("term", "Term"),
     ("union_map", "UnionMap"),
     ("union_pw_aff", "UnionPiecewiseAffine"),
+    ("union_pw_aff_list", "UnionPiecewiseAffineList"),
     ("union_pw_multi_aff", "UnionPiecewiseMultiAffine"),
     ("val", "Value"),
+    ("val_list", "ValueList"),
     ("vec", "Vector"),
     ("union_set", "UnionSet"),
 ];
@@ -363,6 +371,11 @@ const KNOWN_CONSTRUCTOR_RENAMES: &[(&str, &str)] = &[
     ("set_alloc", "set"),
     ("params_alloc", "params"),
     ("read_from_str", "from_str"),
+    ("from_aff_list", "from_list"),
+    ("from_id_list", "from_list"),
+    ("from_pw_aff_list", "from_list"),
+    ("from_union_pw_aff_list", "from_list"),
+    ("from_val_list", "from_list"),
 ];
 
 const KNOWN_FUNCTION_RENAMES: &[(&str, &str)] = &[
@@ -522,9 +535,14 @@ fn collect_declarations(
         }
         let text = fs::read_to_string(&path)
             .map_err(|err| Error::new(format!("failed to read {}: {err}", path.display())))?;
-        let stripped = strip_non_declaration_lines(&strip_comments(&text));
-        for statement in stripped.split(';') {
-            let statement = normalize_whitespace(statement);
+        let text = strip_comments(&text);
+        let stripped = strip_non_declaration_lines(&text);
+        let expanded = expand_known_declaration_macros(&text);
+        for statement in expanded
+            .into_iter()
+            .chain(stripped.split(';').map(ToString::to_string))
+        {
+            let statement = normalize_whitespace(&statement);
             if !statement.contains("isl_") || !statement.contains('(') {
                 continue;
             }
@@ -1114,7 +1132,6 @@ fn overload_type_suffix(arg: &FunctionArg) -> Option<&'static str> {
             "basic_map" => Some("_basic_map"),
             "basic_set" => Some("_basic_set"),
             "id" => Some("_id"),
-            "id_list" => Some("_id_list"),
             "map" => Some("_map"),
             "multi_aff" => Some("_multi_aff"),
             "multi_id" => Some("_multi_id"),
@@ -1469,10 +1486,14 @@ fn rust_type_for_c(c_type: &str) -> Option<&'static str> {
 fn rust_type_path(rust_type: &str) -> Option<TokenStream> {
     match rust_type {
         "Affine" => Some(quote!(crate::aff::Affine)),
+        "AffineList" => Some(quote!(crate::list::AffineList)),
         "BasicMap" => Some(quote!(crate::map::BasicMap)),
         "BasicSet" => Some(quote!(crate::set::BasicSet)),
+        "BasicSetList" => Some(quote!(crate::list::BasicSetList)),
         "Constraint" => Some(quote!(crate::constraint::Constraint)),
+        "ConstraintList" => Some(quote!(crate::list::ConstraintList)),
         "Ident" => Some(quote!(crate::ident::Ident)),
+        "IdentList" => Some(quote!(crate::list::IdentList)),
         "LocalSpace" => Some(quote!(crate::local_space::LocalSpace)),
         "Map" => Some(quote!(crate::map::Map)),
         "Matrix" => Some(quote!(crate::mat::Matrix)),
@@ -1485,19 +1506,23 @@ fn rust_type_path(rust_type: &str) -> Option<TokenStream> {
         "MultiValue" => Some(quote!(crate::multi_val::MultiValue)),
         "PiecewiseQuasiPolynomial" => Some(quote!(crate::polynomial::PiecewiseQuasiPolynomial)),
         "PiecewiseAffine" => Some(quote!(crate::pw_aff::PiecewiseAffine)),
+        "PiecewiseAffineList" => Some(quote!(crate::list::PiecewiseAffineList)),
         "PiecewiseMultiAffine" => Some(quote!(crate::pw_multi_aff::PiecewiseMultiAffine)),
         "Point" => Some(quote!(crate::point::Point)),
         "QuasiPolynomial" => Some(quote!(crate::polynomial::QuasiPolynomial)),
         "Set" => Some(quote!(crate::set::Set)),
+        "SetList" => Some(quote!(crate::list::SetList)),
         "Space" => Some(quote!(crate::space::Space)),
         "Term" => Some(quote!(crate::polynomial::Term)),
         "UnionMap" => Some(quote!(crate::union_map::UnionMap)),
         "UnionPiecewiseAffine" => Some(quote!(crate::union_pw_aff::UnionPiecewiseAffine)),
+        "UnionPiecewiseAffineList" => Some(quote!(crate::list::UnionPiecewiseAffineList)),
         "UnionPiecewiseMultiAffine" => {
             Some(quote!(crate::union_pw_multi_aff::UnionPiecewiseMultiAffine))
         }
         "UnionSet" => Some(quote!(crate::union_set::UnionSet)),
         "Value" => Some(quote!(crate::value::Value)),
+        "ValueList" => Some(quote!(crate::list::ValueList)),
         "Vector" => Some(quote!(crate::vec::Vector)),
         _ => None,
     }
@@ -1547,6 +1572,61 @@ fn strip_comments(input: &str) -> String {
         i += 1;
     }
     out
+}
+
+fn expand_known_declaration_macros(input: &str) -> Vec<String> {
+    let mut declarations = Vec::new();
+    let multi_decl = Regex::new(r"(?m)^\s*ISL_DECLARE_MULTI\(([^)]+)\)\s*$").unwrap();
+    for captures in multi_decl.captures_iter(input) {
+        declarations.extend(expand_isl_declare_multi(captures[1].trim()));
+    }
+    declarations
+}
+
+fn expand_isl_declare_multi(base: &str) -> Vec<String> {
+    let multi = format!("isl_multi_{base}");
+    let element = format!("isl_{base}");
+    let list = format!("isl_{base}_list");
+    vec![
+        format!("__isl_export __isl_give isl_space *{multi}_get_space(__isl_keep {multi} *multi)"),
+        format!("__isl_give isl_space *{multi}_get_domain_space(__isl_keep {multi} *multi)"),
+        format!("__isl_export __isl_give {list} *{multi}_get_list(__isl_keep {multi} *multi)"),
+        format!(
+            "__isl_constructor __isl_give {multi} *{multi}_from_{base}_list(__isl_take isl_space *space, __isl_take {list} *list)"
+        ),
+        format!(
+            "__isl_export isl_bool {multi}_plain_is_equal(__isl_keep {multi} *multi1, __isl_keep {multi} *multi2)"
+        ),
+        format!("__isl_export isl_size {multi}_size(__isl_keep {multi} *multi)"),
+        format!(
+            "__isl_export __isl_give {element} *{multi}_get_at(__isl_keep {multi} *multi, int pos)"
+        ),
+        format!("__isl_give {element} *{multi}_get_{base}(__isl_keep {multi} *multi, int pos)"),
+        format!(
+            "__isl_export __isl_give {multi} *{multi}_set_at(__isl_take {multi} *multi, int pos, __isl_take {element} *el)"
+        ),
+        format!(
+            "__isl_give {multi} *{multi}_set_{base}(__isl_take {multi} *multi, int pos, __isl_take {element} *el)"
+        ),
+        format!(
+            "__isl_give {multi} *{multi}_range_splice(__isl_take {multi} *multi1, unsigned pos, __isl_take {multi} *multi2)"
+        ),
+        format!("__isl_give {multi} *{multi}_flatten_range(__isl_take {multi} *multi)"),
+        format!(
+            "__isl_export __isl_give {multi} *{multi}_flat_range_product(__isl_take {multi} *multi1, __isl_take {multi} *multi2)"
+        ),
+        format!(
+            "__isl_export __isl_give {multi} *{multi}_range_product(__isl_take {multi} *multi1, __isl_take {multi} *multi2)"
+        ),
+        format!("__isl_give {multi} *{multi}_factor_range(__isl_take {multi} *multi)"),
+        format!("isl_bool {multi}_range_is_wrapping(__isl_keep {multi} *multi)"),
+        format!("__isl_give {multi} *{multi}_range_factor_domain(__isl_take {multi} *multi)"),
+        format!("__isl_give {multi} *{multi}_range_factor_range(__isl_take {multi} *multi)"),
+        format!(
+            "__isl_give {multi} *{multi}_align_params(__isl_take {multi} *multi, __isl_take isl_space *model)"
+        ),
+        format!("__isl_give {multi} *{multi}_from_range(__isl_take {multi} *multi)"),
+    ]
 }
 
 fn strip_non_declaration_lines(input: &str) -> String {
@@ -1804,9 +1884,7 @@ mod tests {
                 .join("isl")
                 .join("include")
                 .join("isl"),
-            root.join("barvinok-sys")
-                .join("barvinok")
-                .join("barvinok"),
+            root.join("barvinok-sys").join("barvinok").join("barvinok"),
         ];
         let out_dir = root.join("target").join("barvinok-gen-test");
         let _ = fs::remove_dir_all(&out_dir);
@@ -1823,14 +1901,30 @@ mod tests {
         let local_space =
             fs::read_to_string(out_dir.join("generated").join("local_space.rs")).unwrap();
         let map = fs::read_to_string(out_dir.join("generated").join("map.rs")).unwrap();
+        let multi_aff = fs::read_to_string(out_dir.join("generated").join("multi_aff.rs")).unwrap();
+        let multi_pw_aff =
+            fs::read_to_string(out_dir.join("generated").join("multi_pw_aff.rs")).unwrap();
+        let multi_val = fs::read_to_string(out_dir.join("generated").join("multi_val.rs")).unwrap();
         let value = fs::read_to_string(out_dir.join("generated").join("value.rs")).unwrap();
         let vector = fs::read_to_string(out_dir.join("generated").join("vec.rs")).unwrap();
         let normalized: String = space.chars().filter(|ch| !ch.is_whitespace()).collect();
         let value_normalized: String = value.chars().filter(|ch| !ch.is_whitespace()).collect();
-        let basic_map_normalized: String = basic_map.chars().filter(|ch| !ch.is_whitespace()).collect();
-        let local_space_normalized: String = local_space.chars().filter(|ch| !ch.is_whitespace()).collect();
+        let basic_map_normalized: String =
+            basic_map.chars().filter(|ch| !ch.is_whitespace()).collect();
+        let local_space_normalized: String = local_space
+            .chars()
+            .filter(|ch| !ch.is_whitespace())
+            .collect();
         let map_normalized: String = map.chars().filter(|ch| !ch.is_whitespace()).collect();
         let aff_normalized: String = aff.chars().filter(|ch| !ch.is_whitespace()).collect();
+        let multi_aff_normalized: String =
+            multi_aff.chars().filter(|ch| !ch.is_whitespace()).collect();
+        let multi_pw_aff_normalized: String = multi_pw_aff
+            .chars()
+            .filter(|ch| !ch.is_whitespace())
+            .collect();
+        let multi_val_normalized: String =
+            multi_val.chars().filter(|ch| !ch.is_whitespace()).collect();
         let vector_normalized: String = vector.chars().filter(|ch| !ch.is_whitespace()).collect();
         assert!(normalized.contains("impl<'a>Space<'a>{"));
         assert!(normalized.contains("crate::isl_ctor!([ctx]new,isl_space_alloc"));
@@ -1839,6 +1933,17 @@ mod tests {
         assert!(local_space_normalized.contains("crate::isl_project_opt!"));
         assert!(local_space_normalized.contains("crate::isl_transform_opt!"));
         assert!(map_normalized.contains("cardinality"));
+        assert!(
+            multi_aff_normalized.contains("crate::isl_ctor!(from_list,isl_multi_aff_from_aff_list")
+        );
+        assert!(multi_aff_normalized.contains("crate::isl_size!(isl_multi_aff_size=>size"));
+        assert!(multi_aff_normalized.contains(
+            "crate::isl_project!([into(crate::list::AffineList<'a>)]get_list,isl_multi_aff_get_list"
+        ));
+        assert!(multi_pw_aff_normalized.contains("crate::isl_project!([into(crate::list::PiecewiseAffineList<'a>)]get_list,isl_multi_pw_aff_get_list"));
+        assert!(multi_val_normalized.contains(
+            "crate::isl_project!([into(crate::list::ValueList<'a>)]get_list,isl_multi_val_get_list"
+        ));
         assert!(normalized.contains("matches"));
         assert!(value_normalized.contains("crate::isl_ctor!([ctx]from_str,isl_val_read_from_str"));
         assert!(value_normalized.contains("crate::isl_ctor!([ctx]zero,isl_val_zero"));
@@ -1869,5 +1974,33 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(declarations.iter().any(|decl| decl.name == "isl_val_zero"));
+    }
+
+    #[test]
+    fn expands_isl_declare_multi_macros() {
+        let input = r#"
+            ISL_DECLARE_MULTI(aff)
+        "#;
+        let expanded = expand_known_declaration_macros(input);
+        let expanded = expanded
+            .into_iter()
+            .map(|statement| normalize_whitespace(&statement))
+            .collect::<Vec<_>>();
+
+        assert!(
+            expanded
+                .iter()
+                .any(|statement| statement.contains("isl_multi_aff_get_list"))
+        );
+        assert!(
+            expanded
+                .iter()
+                .any(|statement| statement.contains("isl_multi_aff_from_aff_list"))
+        );
+        assert!(
+            expanded
+                .iter()
+                .any(|statement| statement.contains("isl_multi_aff_set_at"))
+        );
     }
 }

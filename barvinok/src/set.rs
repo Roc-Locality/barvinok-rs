@@ -1,7 +1,11 @@
 use std::{cell::Cell, mem::ManuallyDrop, ptr::NonNull};
 
 use crate::{
-    DimType, constraint::Constraint, impl_isl_handle, list::List, point::Point,
+    DimType,
+    constraint::Constraint,
+    impl_isl_handle,
+    list::{BasicSetList, ConstraintList, SetList},
+    point::Point,
 };
 
 impl_isl_handle!(Set, set);
@@ -9,8 +13,6 @@ impl_isl_handle!(BasicSet, basic_set);
 
 include!(concat!(env!("OUT_DIR"), "/generated/basic_set.rs"));
 include!(concat!(env!("OUT_DIR"), "/generated/set.rs"));
-
-type ConstraintList<'a> = List<'a, Constraint<'a>>;
 
 impl<'a> BasicSet<'a> {
     crate::isl_transform!(
@@ -91,7 +93,7 @@ impl PartialEq for Set<'_> {
     }
 }
 
-impl<'a> List<'a, BasicSet<'a>> {
+impl<'a> BasicSetList<'a> {
     pub fn intersect(self) -> BasicSet<'a> {
         let this = ManuallyDrop::new(self);
         let handle = unsafe { barvinok_sys::isl_basic_set_list_intersect(this.handle.as_ptr()) };
@@ -103,7 +105,7 @@ impl<'a> List<'a, BasicSet<'a>> {
     }
 }
 
-impl<'a> List<'a, Set<'a>> {
+impl<'a> SetList<'a> {
     pub fn union(self) -> Set<'a> {
         let this = ManuallyDrop::new(self);
         let handle = unsafe { barvinok_sys::isl_set_list_union(this.handle.as_ptr()) };
@@ -230,8 +232,7 @@ mod test {
         let ctx = Context::new();
         ctx.scope(|ctx| {
             let basic_set =
-                BasicSet::from_str(ctx, "[p0, p1] -> { [i0, i1] : 5i0 + 6i1 >= p1 - p0 }")
-                    .unwrap();
+                BasicSet::from_str(ctx, "[p0, p1] -> { [i0, i1] : 5i0 + 6i1 >= p1 - p0 }").unwrap();
             println!("{:?}", basic_set);
         });
     }
@@ -243,7 +244,7 @@ mod test {
             let space = Space::set(ctx, 1, 5).unwrap();
             let basic_set1 = BasicSet::universe(space.clone()).unwrap();
             let basic_set2 = BasicSet::empty(space.clone()).unwrap();
-            let mut list = List::new(ctx, 2);
+            let mut list = BasicSetList::new(ctx, 2);
             list.push(basic_set1);
             list.push(basic_set2);
             let intersected_set = list.intersect();

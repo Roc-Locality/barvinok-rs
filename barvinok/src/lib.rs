@@ -9,6 +9,7 @@ pub mod list;
 pub mod local_space;
 pub mod map;
 pub mod mat;
+pub mod multi;
 pub mod multi_aff;
 pub mod multi_id;
 pub mod multi_pw_aff;

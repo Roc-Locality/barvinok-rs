@@ -29,7 +29,10 @@ mod tests {
         ctx.scope(|ctx| {
             let space = Space::new(ctx, 2, 3, 4).unwrap();
             let local_space = LocalSpace::from_space(space.clone()).unwrap();
-            assert_eq!(local_space.get_space().unwrap().handle.as_ptr(), space.handle.as_ptr());
+            assert_eq!(
+                local_space.get_space().unwrap().handle.as_ptr(),
+                space.handle.as_ptr()
+            );
             assert!(!local_space.is_params().unwrap());
             assert!(!local_space.is_set().unwrap());
             assert_eq!(local_space.dim(DimType::Param).unwrap(), 2);
@@ -66,7 +69,10 @@ mod tests {
             println!("{:?}", local_space);
             assert!(local_space.get_dim_id(DimType::In, 0).is_none());
             assert!(local_space.get_dim_id(DimType::Out, 0).is_some());
-            assert_eq!(local_space.get_dim_name(DimType::Out, 0).unwrap(), Some("y"));
+            assert_eq!(
+                local_space.get_dim_name(DimType::Out, 0).unwrap(),
+                Some("y")
+            );
         });
     }
 

@@ -1,5 +1,5 @@
 use crate::aff::Affine;
-use crate::list::List;
+use crate::list::AffineList;
 use crate::space::Space;
 use crate::{DimType, constraint::Constraint, impl_isl_handle, isl_ctor};
 
@@ -33,7 +33,7 @@ impl<'a> TryFrom<BasicMap<'a>> for Map<'a> {
 }
 
 impl<'a> BasicMap<'a> {
-    isl_ctor!(from_affine_list, isl_basic_map_from_aff_list, domain_space: Space<'a>, [managed] aff: List<'a, Affine<'a>>);
+    isl_ctor!(from_affine_list, isl_basic_map_from_aff_list, domain_space: Space<'a>, [managed] aff: AffineList<'a>);
 }
 
 #[cfg(test)]

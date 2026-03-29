@@ -403,20 +403,18 @@ mod tests {
 
     #[test]
     fn test_dump_empty_list() {
-        type ValueList<'a> = crate::list::List<'a, Value<'a>>;
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let val_list = ValueList::new(ctx, 9);
+            let val_list = crate::list::ValueList::new(ctx, 9);
             println!("val_list: {:?}", val_list);
         });
     }
 
     #[test]
     fn test_add_to_list() {
-        type ValueList<'a> = crate::list::List<'a, Value<'a>>;
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let mut val_list = ValueList::new(ctx, 9);
+            let mut val_list = crate::list::ValueList::new(ctx, 9);
             let val1 = Value::int_from_si(ctx, 42).unwrap();
             let val2 = Value::int_from_si(ctx, 7).unwrap();
             val_list.push(val1);
