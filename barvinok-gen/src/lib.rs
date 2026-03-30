@@ -479,8 +479,17 @@ pub fn generate(
     header_roots: &[PathBuf],
     out_dir: &Path,
 ) -> Result<Vec<PathBuf>> {
+    generate_with_sys_bindings(crate_dir, header_roots, out_dir, None)
+}
+
+pub fn generate_with_sys_bindings(
+    crate_dir: &Path,
+    header_roots: &[PathBuf],
+    out_dir: &Path,
+    sys_bindings: Option<&Path>,
+) -> Result<Vec<PathBuf>> {
     let declarations = parse_headers(header_roots)?;
-    let available_sys_symbols = available_sys_symbols(crate_dir, out_dir)?;
+    let available_sys_symbols = available_sys_symbols(crate_dir, out_dir, sys_bindings)?;
     let generated_dir = out_dir.join("generated");
     fs::create_dir_all(&generated_dir).map_err(|err| {
         Error::new(format!(
@@ -984,8 +993,13 @@ fn collect_macro_method_names(mac: &syn::Macro, names: &mut BTreeSet<String>) ->
     Ok(())
 }
 
-fn available_sys_symbols(crate_dir: &Path, out_dir: &Path) -> Result<Option<BTreeSet<String>>> {
-    let Some(bindings_file) = select_bindings_file(crate_dir, out_dir)? else {
+fn available_sys_symbols(
+    crate_dir: &Path,
+    out_dir: &Path,
+    explicit_bindings_file: Option<&Path>,
+) -> Result<Option<BTreeSet<String>>> {
+    let Some(bindings_file) = select_bindings_file(crate_dir, out_dir, explicit_bindings_file)?
+    else {
         return Ok(None);
     };
     let symbol_regex = Regex::new(r"pub fn (isl_[A-Za-z0-9_]+)\(")
@@ -1004,7 +1018,15 @@ fn available_sys_symbols(crate_dir: &Path, out_dir: &Path) -> Result<Option<BTre
     Ok(Some(symbols))
 }
 
-fn select_bindings_file(crate_dir: &Path, out_dir: &Path) -> Result<Option<PathBuf>> {
+fn select_bindings_file(
+    crate_dir: &Path,
+    out_dir: &Path,
+    explicit_bindings_file: Option<&Path>,
+) -> Result<Option<PathBuf>> {
+    if let Some(bindings_file) = explicit_bindings_file {
+        return Ok(Some(bindings_file.to_path_buf()));
+    }
+
     let mut bindings_files = current_profile_bindings_files(out_dir)?;
     if bindings_files.is_empty() {
         let target_dir = crate_dir
@@ -2032,13 +2054,55 @@ mod tests {
         std::thread::sleep(Duration::from_millis(20));
         fs::write(&second, "pub fn isl_live_symbol();\n").unwrap();
 
-        let bindings = select_bindings_file(&crate_dir, &out_dir).unwrap().unwrap();
+        let bindings = select_bindings_file(&crate_dir, &out_dir, None)
+            .unwrap()
+            .unwrap();
         assert_eq!(bindings, second);
 
-        let symbols = available_sys_symbols(&crate_dir, &out_dir)
+        let symbols = available_sys_symbols(&crate_dir, &out_dir, None)
             .unwrap()
             .unwrap();
         assert!(symbols.contains("isl_live_symbol"));
+        assert!(!symbols.contains("isl_stale_symbol"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn explicit_bindings_file_wins_over_directory_scan() {
+        let root = temp_test_dir("explicit-bindings");
+        let crate_dir = root.join("barvinok");
+        let stale = root
+            .join("target")
+            .join("debug")
+            .join("build")
+            .join("barvinok-sys-stale")
+            .join("out")
+            .join("bindings.rs");
+        let explicit = root.join("active-bindings.rs");
+        let out_dir = root
+            .join("target")
+            .join("debug")
+            .join("build")
+            .join("barvinok-current")
+            .join("out");
+
+        fs::create_dir_all(stale.parent().unwrap()).unwrap();
+        fs::create_dir_all(&crate_dir).unwrap();
+        fs::create_dir_all(&out_dir).unwrap();
+
+        fs::write(&stale, "pub fn isl_stale_symbol();\n").unwrap();
+        fs::write(&explicit, "pub fn isl_active_symbol();\n").unwrap();
+
+        let bindings = select_bindings_file(&crate_dir, &out_dir, Some(&explicit))
+            .unwrap()
+            .unwrap();
+        assert_eq!(bindings, explicit);
+
+        let symbols = available_sys_symbols(&crate_dir, &out_dir, Some(&explicit))
+            .unwrap()
+            .unwrap();
+        assert!(symbols.contains("isl_active_symbol"));
         assert!(!symbols.contains("isl_stale_symbol"));
 
         let _ = fs::remove_dir_all(root);

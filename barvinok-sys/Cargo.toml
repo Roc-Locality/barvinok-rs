@@ -3,6 +3,7 @@ name = "barvinok-sys"
 version = "0.1.0-alpha.1"
 edition = "2024"
 build = "build.rs"
+links = "barvinok_sys"
 
 [dependencies]
 
