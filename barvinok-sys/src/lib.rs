@@ -27,11 +27,8 @@ mod tests {
 
     #[test]
     fn it_checks_barvinok_options_args() {
-        unsafe {
-            std::println!(
-                "barvinok_options_args: {:?}",
-                super::barvinok_options_args.options_size
-            );
-        }
+        let args = core::ptr::addr_of!(super::barvinok_options_args);
+        std::println!("barvinok_options_args symbol: {:p}", args,);
+        assert!(!args.is_null());
     }
 }

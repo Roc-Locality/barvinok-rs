@@ -552,23 +552,23 @@ fn collect_declarations(
             {
                 continue;
             }
-            if let Ok(decl) = parse_declaration(&statement) {
-                if decl.name.starts_with("isl_") {
-                    let key = format!(
-                        "{}({})->{}",
-                        decl.name,
-                        decl.args
-                            .iter()
-                            .map(|arg| arg.ty.as_str())
-                            .collect::<Vec<_>>()
-                            .join(","),
-                        decl.return_ty
-                    );
-                    if !seen.insert(key) {
-                        continue;
-                    }
-                    declarations.push(decl);
+            if let Ok(decl) = parse_declaration(&statement)
+                && decl.name.starts_with("isl_")
+            {
+                let key = format!(
+                    "{}({})->{}",
+                    decl.name,
+                    decl.args
+                        .iter()
+                        .map(|arg| arg.ty.as_str())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    decl.return_ty
+                );
+                if !seen.insert(key) {
+                    continue;
                 }
+                declarations.push(decl);
             }
         }
     }
@@ -584,10 +584,10 @@ fn render_type(
     let existing_methods = existing_method_names(crate_dir, config)?;
     let mut methods = Vec::new();
     for decl in declarations {
-        if let Some(available_sys_symbols) = available_sys_symbols {
-            if !available_sys_symbols.contains(&decl.name) {
-                continue;
-            }
+        if let Some(available_sys_symbols) = available_sys_symbols
+            && !available_sys_symbols.contains(&decl.name)
+        {
+            continue;
         }
         if config.exclude.contains(&decl.name.as_str()) {
             continue;
@@ -624,6 +624,7 @@ fn render_type(
     let file_tokens = quote! {
         #handle_tokens
 
+        #[allow(clippy::too_many_arguments)]
         impl<'a> #rust_type<'a> {
             #(#method_tokens)*
         }
@@ -1103,11 +1104,11 @@ fn normalize_overload_suffixes(name: &str, args: &[FunctionArg]) -> NormalizedSu
     let mut stripped = name.to_string();
     let mut removed_suffixes = Vec::new();
     for arg in args.iter().rev() {
-        if let Some(type_suffix) = overload_type_suffix(arg) {
-            if stripped.ends_with(type_suffix) {
-                stripped.truncate(stripped.len() - type_suffix.len());
-                removed_suffixes.push(type_suffix.trim_start_matches('_').to_string());
-            }
+        if let Some(type_suffix) = overload_type_suffix(arg)
+            && stripped.ends_with(type_suffix)
+        {
+            stripped.truncate(stripped.len() - type_suffix.len());
+            removed_suffixes.push(type_suffix.trim_start_matches('_').to_string());
         }
     }
     removed_suffixes.reverse();
@@ -1205,12 +1206,10 @@ fn render_transform(
         } else {
             quote! { crate::isl_transform!([into(#target_ty)] #method_ident, #sys_fn_ident, #(#args),*); }
         }
+    } else if args.is_empty() {
+        quote! { crate::isl_transform!(#method_ident, #sys_fn_ident); }
     } else {
-        if args.is_empty() {
-            quote! { crate::isl_transform!(#method_ident, #sys_fn_ident); }
-        } else {
-            quote! { crate::isl_transform!(#method_ident, #sys_fn_ident, #(#args),*); }
-        }
+        quote! { crate::isl_transform!(#method_ident, #sys_fn_ident, #(#args),*); }
     })
 }
 
