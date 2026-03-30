@@ -1,0 +1,7 @@
+[package]
+name = "barvinok-macros"
+version = "0.1.0-alpha.1"
+edition = "2024"
+
+[dependencies]
+paste = "1.0.15"

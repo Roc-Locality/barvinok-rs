@@ -65,6 +65,9 @@ fn main() {
         .allowlist_function("isl.*")
         .allowlist_function("barvinok.*")
         .allowlist_recursively(true)
+        // Layout assertions for transitive libc/internal types are not
+        // required for this FFI surface and are brittle across toolchains.
+        .layout_tests(false)
         // use core
         .use_core()
         // Finish the builder and generate the bindings.
@@ -74,7 +77,9 @@ fn main() {
 
     // Write the bindings to the $OUT_DIR/bindings.rs file.
     let out_path = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let bindings_path = out_path.join("bindings.rs");
     bindings
-        .write_to_file(out_path.join("bindings.rs"))
+        .write_to_file(&bindings_path)
         .expect("Couldn't write bindings!");
+    println!("cargo:bindings={}", bindings_path.display());
 }

@@ -1,8 +1,9 @@
 use std::{ffi::c_char, mem::ManuallyDrop, ptr::NonNull};
 
-use crate::{ContextRef, nonnull_or_alloc_error, printer::ISLPrint};
+use crate::{ContextRef, FromRawIsl, nonnull_or_alloc_error, printer::ISLPrint};
 
 #[allow(clippy::missing_safety_doc)]
+#[doc(hidden)]
 pub trait ListRawAPI {
     type Handle;
     type ListHandle;
@@ -275,10 +276,58 @@ impl_list_raw_api!(
 );
 
 impl_list_raw_api!(
+    crate::ident::Ident<'_>,
+    handle = barvinok_sys::isl_id,
+    list_handle = barvinok_sys::isl_id_list,
+    prefix = id,
+    unsafe fn get_handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr()
+    },
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+);
+
+impl_list_raw_api!(
     crate::aff::Affine<'_>,
     handle = barvinok_sys::isl_aff,
     list_handle = barvinok_sys::isl_aff_list,
     prefix = aff,
+    unsafe fn get_handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr()
+    },
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+);
+
+impl_list_raw_api!(
+    crate::pw_aff::PiecewiseAffine<'_>,
+    handle = barvinok_sys::isl_pw_aff,
+    list_handle = barvinok_sys::isl_pw_aff_list,
+    prefix = pw_aff,
+    unsafe fn get_handle(&self) -> *mut Self::Handle {
+        self.handle.as_ptr()
+    },
+    unsafe fn from_raw_handle(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
+);
+
+impl_list_raw_api!(
+    crate::union_pw_aff::UnionPiecewiseAffine<'_>,
+    handle = barvinok_sys::isl_union_pw_aff,
+    list_handle = barvinok_sys::isl_union_pw_aff_list,
+    prefix = union_pw_aff,
     unsafe fn get_handle(&self) -> *mut Self::Handle {
         self.handle.as_ptr()
     },
@@ -322,9 +371,30 @@ impl_list_raw_api!(
     }
 );
 
+pub type IdentList<'a> = List<'a, crate::ident::Ident<'a>>;
+pub type ValueList<'a> = List<'a, crate::value::Value<'a>>;
+pub type ConstraintList<'a> = List<'a, crate::constraint::Constraint<'a>>;
+pub type AffineList<'a> = List<'a, crate::aff::Affine<'a>>;
+pub type PiecewiseAffineList<'a> = List<'a, crate::pw_aff::PiecewiseAffine<'a>>;
+pub type UnionPiecewiseAffineList<'a> = List<'a, crate::union_pw_aff::UnionPiecewiseAffine<'a>>;
+pub type SetList<'a> = List<'a, crate::set::Set<'a>>;
+pub type BasicSetList<'a> = List<'a, crate::set::BasicSet<'a>>;
+
+#[doc(hidden)]
 pub struct List<'a, T: ListRawAPI> {
     pub(crate) handle: NonNull<T::ListHandle>,
     pub(crate) marker: std::marker::PhantomData<*mut &'a [&'a T]>,
+}
+
+impl<'a, T: ListRawAPI + 'a> FromRawIsl<'a> for List<'a, T> {
+    type Handle = T::ListHandle;
+
+    unsafe fn from_raw_nonnull(handle: NonNull<Self::Handle>) -> Self {
+        Self {
+            handle,
+            marker: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<'a, T: ListRawAPI + 'a> List<'a, T> {
@@ -342,6 +412,10 @@ impl<'a, T: ListRawAPI + 'a> List<'a, T> {
             unsafe { NonNull::new_unchecked(T::get_context(self.handle.as_ptr())) },
             std::marker::PhantomData,
         )
+    }
+
+    pub fn context_ref(&self) -> ContextRef<'a> {
+        self.context()
     }
 
     pub fn len(&self) -> usize {
@@ -425,6 +499,7 @@ impl<'a, T: ListRawAPI + 'a> std::fmt::Debug for List<'a, T> {
     }
 }
 
+#[doc(hidden)]
 pub struct Iter<'a, 'b, T: ListRawAPI + 'a> {
     list: &'a List<'b, T>,
     index: usize,
@@ -482,9 +557,9 @@ mod tests {
     fn test_list_creation_and_push() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let mut list = List::<Value>::new(ctx, 10);
+            let mut list = ValueList::new(ctx, 10);
             assert_eq!(list.len(), 0);
-            let val = Value::new_ui(ctx, 42);
+            let val = Value::int_from_ui(ctx, 42).unwrap();
             list.push(val.clone() + val.clone());
             list.push(val.clone() * val.clone());
             list.push(val);
@@ -497,9 +572,9 @@ mod tests {
     fn test_list_get() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let mut list = List::<Value>::new(ctx, 10);
-            let val1 = Value::new_ui(ctx, 42);
-            let val2 = Value::new_ui(ctx, 43);
+            let mut list = ValueList::new(ctx, 10);
+            let val1 = Value::int_from_ui(ctx, 42).unwrap();
+            let val2 = Value::int_from_ui(ctx, 43).unwrap();
             list.push(val1.clone());
             list.push(val2.clone());
             assert!(list.get(0).unwrap() == val1);
@@ -512,14 +587,14 @@ mod tests {
     fn test_list_set() {
         let ctx = Context::new();
         ctx.scope(|ctx| {
-            let mut list = List::<Value>::new(ctx, 10);
-            let val1 = Value::new_ui(ctx, 42);
-            let val2 = Value::new_ui(ctx, 43);
+            let mut list = ValueList::new(ctx, 10);
+            let val1 = Value::int_from_ui(ctx, 42).unwrap();
+            let val2 = Value::int_from_ui(ctx, 43).unwrap();
             list.push(val1.clone());
             list.push(val2.clone());
             assert!(list.get(0).unwrap() == val1);
             assert!(list.get(1).unwrap() == val2);
-            let val3 = Value::new_ui(ctx, 44);
+            let val3 = Value::int_from_ui(ctx, 44).unwrap();
             list.set(0, val3.clone());
             assert!(list.get(0).unwrap() == val3);
         });

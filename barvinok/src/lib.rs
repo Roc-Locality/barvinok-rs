@@ -9,11 +9,23 @@ pub mod list;
 pub mod local_space;
 pub mod map;
 pub mod mat;
+pub mod multi;
+pub mod multi_aff;
+pub mod multi_id;
+pub mod multi_pw_aff;
+pub mod multi_union_pw_aff;
+pub mod multi_val;
 pub mod point;
 pub mod polynomial;
 mod printer;
+pub mod pw_aff;
+pub mod pw_multi_aff;
 pub mod set;
 pub mod space;
+pub mod union_map;
+pub mod union_pw_aff;
+pub mod union_pw_multi_aff;
+pub mod union_set;
 pub mod value;
 pub mod vec;
 
@@ -84,6 +96,12 @@ fn nonnull_or_alloc_error<T>(ptr: *mut T) -> NonNull<T> {
     NonNull::new(ptr).unwrap_or_else(|| {
         std::alloc::handle_alloc_error(std::alloc::Layout::new::<T>());
     })
+}
+
+pub(crate) trait FromRawIsl<'a>: Sized {
+    type Handle;
+
+    unsafe fn from_raw_nonnull(handle: NonNull<Self::Handle>) -> Self;
 }
 
 #[repr(transparent)]
@@ -198,329 +216,82 @@ pub enum DimType {
 }
 
 macro_rules! impl_isl_handle {
-     ([noprint] $RustType:ident, $cname:ident) => {
-        paste::paste! {
-            #[repr(transparent)]
-            pub struct $RustType<'a> {
-                pub(crate) handle: std::ptr::NonNull<barvinok_sys::[<isl_ $cname>]>,
-                pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
-            }
-            impl Clone for $RustType<'_> {
-                fn clone(&self) -> Self {
-                    let handle = unsafe { barvinok_sys::[< isl_ $cname _copy>](self.handle.as_ptr()) };
-                    let handle = $crate::nonnull_or_alloc_error(handle);
-                    Self {
-                        handle,
-                        marker: std::marker::PhantomData,
-                    }
-                }
-            }
-
-            impl Drop for $RustType<'_> {
-                fn drop(&mut self) {
-                    unsafe { barvinok_sys::[< isl_ $cname _free>](self.handle.as_ptr()) };
-                }
-            }
-
-            impl<'a> $RustType<'a> {
-                pub fn context_ref(&self) -> $crate::ContextRef<'a> {
-                    let ctx = unsafe { barvinok_sys::[< isl_ $cname _get_ctx>](self.handle.as_ptr()) };
-                    let ptr = unsafe { std::ptr::NonNull::new_unchecked(ctx) };
-                    $crate::ContextRef(ptr, std::marker::PhantomData)
-                }
-            }
-        }
-    };
-    ($([$flag:ident])? $RustType:ident, $cname:ident) => {
-        paste::paste! {
-            #[repr(transparent)]
-            pub struct $RustType<'a> {
-                pub(crate) handle: std::ptr::NonNull<barvinok_sys::[<isl_ $cname>]>,
-                pub(crate) marker: std::marker::PhantomData<*mut &'a ()>,
-            }
-            impl Clone for $RustType<'_> {
-                fn clone(&self) -> Self {
-                    let handle = unsafe { barvinok_sys::[< isl_ $cname _copy>](self.handle.as_ptr()) };
-                    let handle = $crate::nonnull_or_alloc_error(handle);
-                    Self {
-                        handle,
-                        marker: std::marker::PhantomData,
-                    }
-                }
-            }
-
-            impl Drop for $RustType<'_> {
-                fn drop(&mut self) {
-                    unsafe { barvinok_sys::[< isl_ $cname _free>](self.handle.as_ptr()) };
-                }
-            }
-
-            impl<'a> $RustType<'a> {
-                pub fn context_ref(&self) -> $crate::ContextRef<'a> {
-                    let ctx = unsafe { barvinok_sys::[< isl_ $cname _get_ctx>](self.handle.as_ptr()) };
-                    let ptr = unsafe { std::ptr::NonNull::new_unchecked(ctx) };
-                    $crate::ContextRef(ptr, std::marker::PhantomData)
-                }
-                pub fn dump(&self) {
-                    unsafe { barvinok_sys::[< isl_ $cname _dump>](self.handle.as_ptr()) };
-                }
-            }
-
-            $crate::impl_isl_print!($([$flag])* $RustType, $cname);
-        }
-    };
-
-}
-
-pub(crate) use impl_isl_handle;
-
-macro_rules! isl_macro_impl {
-    (@get_access [trivial] $val:ident) => {
-        $val
-    };
-    (@get_access [managed] $val:ident) => {
-        $val.handle.as_ptr()
-    };
-    (@get_access [ref] $val:ident) => {
-        $val.handle.as_ptr()
-    };
-    (@get_access [cast($target:ty)] $val:ident) => {
-        $val as $target
-    };
-    (@get_access [str] $val:ident) => {
-        $val.as_ptr()
-    };
-
-    (@take [trivial] $val:ident) => {
-        $val
-    };
-    (@take [managed] $val:ident) => {
-        ManuallyDrop::new($val)
-    };
-    (@take [ref] $val:ident) => {
-        $val
-    };
-    (@take [cast($target:ty)] $val:ident) => {
-        $val as $target
-    };
-    (@take [str] $val:ident) => {
-        std::ffi::CString::new($val)?
+    ($($tt:tt)*) => {
+        barvinok_macros::impl_isl_handle!(runtime = crate, sys = barvinok_sys, $($tt)*);
     };
 }
 
 macro_rules! isl_ctor {
-    ($func:ident, $sys_fn:ident,
-     $first_name:ident : $first_ty:ty
-     $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
-        pub fn $func(
-            $first_name: $first_ty
-            $(, $name: $ty )*
-        ) -> Result<Self, crate::Error> {
-            // pull the ContextRef from the first argument
-            let ctx = $first_name.context_ref();
-            // consume each arg into ManuallyDrop
-            let $first_name = std::mem::ManuallyDrop::new($first_name);
-            $(
-                let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
-            )*
-
-            // call the raw C function
-            let raw = unsafe {
-                barvinok_sys::$sys_fn(
-                    $first_name.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) )*
-                )
-            };
-
-            // wrap in NonNull, use saved `ctx` on error
-            NonNull::new(raw)
-                .ok_or_else(|| ctx.last_error_or_unknown().into())
-                .map(|handle| Self {
-                    handle,
-                    marker: std::marker::PhantomData,
-                })
-        }
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_ctor!(runtime = crate, sys = barvinok_sys, $($tt)*);
     };
-    ([ctx] $func:ident, $sys_fn:ident
-        $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
-           pub fn $func(
-               ctx: $crate::ContextRef<'a>
-               $(, $name: $ty )*
-           ) -> Result<Self, crate::Error> {
-               $(
-                   let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
-               )*
-
-               // call the raw C function
-               let raw = unsafe {
-                   barvinok_sys::$sys_fn(
-                       ctx.0.as_ptr()
-                       $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) )*
-                   )
-               };
-
-               // wrap in NonNull, use saved `ctx` on error
-               NonNull::new(raw)
-                   .ok_or_else(|| ctx.last_error_or_unknown().into())
-                   .map(|handle| Self {
-                       handle,
-                       marker: std::marker::PhantomData,
-                   })
-           }
-       };
 }
 
 macro_rules! isl_transform {
-    ($func:ident, $sys_fn:ident
-     $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
-        pub fn $func(
-            self: Self
-            $(, $name: $ty )*
-        ) -> Result<Self, crate::Error> {
-            // pull the ContextRef from the first argument
-            let ctx = self.context_ref();
-            // consume each arg into ManuallyDrop
-            let this = std::mem::ManuallyDrop::new(self);
-            $(
-                let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
-            )*
-
-            // call the raw C function
-            let raw = unsafe {
-                barvinok_sys::$sys_fn(
-                    this.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name))*
-                )
-            };
-
-            // wrap in NonNull, use saved `ctx` on error
-            NonNull::new(raw)
-                .ok_or_else(|| ctx.last_error_or_unknown().into())
-                .map(|handle| Self {
-                    handle,
-                    marker: std::marker::PhantomData,
-                })
-        }
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_transform!(runtime = crate, sys = barvinok_sys, $($tt)*);
     };
-    ([into ($target:ident)]  $func:ident, $sys_fn:ident
-     $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
-        pub fn $func(
-            self: Self
-            $(, $name: $ty )*
-        ) -> Result<$target<'a>, crate::Error> {
-            // pull the ContextRef from the first argument
-            let ctx = self.context_ref();
-            // consume each arg into ManuallyDrop
-            let this = std::mem::ManuallyDrop::new(self);
-            $(
-                let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
-            )*
+}
 
-            // call the raw C function
-            let raw = unsafe {
-                barvinok_sys::$sys_fn(
-                    this.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) )*
-                )
-            };
-
-            // wrap in NonNull, use saved `ctx` on error
-            NonNull::new(raw)
-                .ok_or_else(|| ctx.last_error_or_unknown().into())
-                .map(|handle| $target {
-                    handle,
-                    marker: std::marker::PhantomData,
-                })
-        }
+macro_rules! isl_transform_opt {
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_transform_opt!(runtime = crate, sys = barvinok_sys, $($tt)*);
     };
 }
 
 macro_rules! isl_project {
-    ([into ($target:ident)]  $func:ident, $sys_fn:ident
-     $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)? ) => {
-        pub fn $func(
-            &self
-            $(, $name: $ty )*
-        ) -> Result<$target<'a>, crate::Error> {
-            $(
-                let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
-            )*
-            // call the raw C function
-            let raw = unsafe {
-                barvinok_sys::$sys_fn(
-                    self.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name) )*
-                )
-            };
-            // wrap in NonNull, use saved `ctx` on error
-            NonNull::new(raw)
-                .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
-                .map(|handle| $target {
-                    handle,
-                    marker: std::marker::PhantomData,
-                })
-        }
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_project!(runtime = crate, sys = barvinok_sys, $($tt)*);
+    };
+}
+
+macro_rules! isl_project_opt {
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_project_opt!(runtime = crate, sys = barvinok_sys, $($tt)*);
     };
 }
 
 macro_rules! isl_flag {
-    ($isl_func:ident => $fn_name:ident $(, [$kind:ident $(($param:ty))?]$name:ident : $ty:ty )* $(,)?) => {
-        paste::paste! {
-            pub fn $fn_name(&self $(, $name: $ty )*) -> Result<bool, $crate::Error> {
-                $(
-                    let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
-                )*
-                let flag = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name))*) };
-                isl_bool_to_optional_bool(flag)
-                    .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
-            }
-        }
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_flag!(runtime = crate, sys = barvinok_sys, $($tt)*);
+    };
+}
+
+macro_rules! isl_str_opt {
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_str_opt!(runtime = crate, sys = barvinok_sys, $($tt)*);
     };
 }
 
 macro_rules! isl_str {
-    ($isl_func:ident => $fn_name:ident $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)?) => {
-        paste::paste! {
-            pub fn $fn_name(&self $(, $name: $ty )*) -> Result<&str, $crate::Error> {
-                $(
-                    let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
-                )*
-                let ptr = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name))*) };
-                if ptr.is_null() {
-                    return Err(self.context_ref().last_error_or_unknown().into());
-                }
-                let cstr = unsafe { std::ffi::CStr::from_ptr(ptr) };
-                Ok(cstr.to_str()?)
-            }
-        }
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_str!(runtime = crate, sys = barvinok_sys, $($tt)*);
+    };
+}
+
+macro_rules! isl_size_opt {
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_size_opt!(runtime = crate, sys = barvinok_sys, $($tt)*);
     };
 }
 
 macro_rules! isl_size {
-    ($isl_func:ident => $fn_name:ident $(, [$kind:ident $(($param:ty))?] $name:ident : $ty:ty )* $(,)?) => {
-        paste::paste! {
-            pub fn $fn_name(&self $(, $name: $ty )*) -> Result<u32, $crate::Error> {
-                $(
-                    let $name = $crate::isl_macro_impl!(@take [$kind $(($param))*] $name);
-                )*
-                let size = unsafe { barvinok_sys::[<isl_ $isl_func>](self.handle.as_ptr()
-                    $(, $crate::isl_macro_impl!(@get_access [$kind $(($param))*] $name))*) };
-                isl_size_to_optional_u32(size)
-                    .ok_or_else(|| self.context_ref().last_error_or_unknown().into())
-            }
-        }
+    ($($tt:tt)*) => {
+        barvinok_macros::isl_size!(runtime = crate, sys = barvinok_sys, $($tt)*);
     };
 }
 
+pub(crate) use impl_isl_handle;
 pub(crate) use isl_ctor;
 pub(crate) use isl_flag;
-pub(crate) use isl_macro_impl;
 pub(crate) use isl_project;
+pub(crate) use isl_project_opt;
 pub(crate) use isl_size;
+pub(crate) use isl_size_opt;
 pub(crate) use isl_str;
+pub(crate) use isl_str_opt;
 pub(crate) use isl_transform;
+pub(crate) use isl_transform_opt;
 
 #[cfg(test)]
 mod tests {
@@ -540,24 +311,24 @@ mod tests {
         ctx.scope(|ctx| {
             let space = Space::set(ctx, 1, 3)?;
             let local_space = LocalSpace::try_from(space.clone())?;
-            let i_ge_0 = Constraint::new_inequality(local_space.clone())
+            let i_ge_0 = Constraint::new_inequality(local_space.clone())?
                 .set_coefficient_si(DimType::Out, 0, 1)?
                 .set_constant_si(0)?;
-            let i_lt_n = Constraint::new_inequality(local_space.clone())
+            let i_lt_n = Constraint::new_inequality(local_space.clone())?
                 .set_coefficient_si(DimType::Param, 0, 1)?
                 .set_coefficient_si(DimType::Out, 0, -1)?
                 .set_constant_si(-1)?;
-            let j_ge_0 = Constraint::new_inequality(local_space.clone())
+            let j_ge_0 = Constraint::new_inequality(local_space.clone())?
                 .set_coefficient_si(DimType::Out, 1, 1)?
                 .set_constant_si(0)?;
-            let j_lt_i = Constraint::new_inequality(local_space.clone())
+            let j_lt_i = Constraint::new_inequality(local_space.clone())?
                 .set_coefficient_si(DimType::Out, 0, 1)?
                 .set_coefficient_si(DimType::Out, 1, -1)?
                 .set_constant_si(-1)?;
-            let k_ge_0 = Constraint::new_inequality(local_space.clone())
+            let k_ge_0 = Constraint::new_inequality(local_space.clone())?
                 .set_coefficient_si(DimType::Out, 2, 1)?
                 .set_constant_si(0)?;
-            let k_lt_j = Constraint::new_inequality(local_space.clone())
+            let k_lt_j = Constraint::new_inequality(local_space.clone())?
                 .set_coefficient_si(DimType::Out, 1, 1)?
                 .set_coefficient_si(DimType::Out, 2, -1)?
                 .set_constant_si(-1)?;
