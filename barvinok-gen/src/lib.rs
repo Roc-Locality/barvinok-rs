@@ -480,7 +480,7 @@ pub fn generate(
     out_dir: &Path,
 ) -> Result<Vec<PathBuf>> {
     let declarations = parse_headers(header_roots)?;
-    let available_sys_symbols = available_sys_symbols(crate_dir)?;
+    let available_sys_symbols = available_sys_symbols(crate_dir, out_dir)?;
     let generated_dir = out_dir.join("generated");
     fs::create_dir_all(&generated_dir).map_err(|err| {
         Error::new(format!(
@@ -984,37 +984,74 @@ fn collect_macro_method_names(mac: &syn::Macro, names: &mut BTreeSet<String>) ->
     Ok(())
 }
 
-fn available_sys_symbols(crate_dir: &Path) -> Result<Option<BTreeSet<String>>> {
-    let target_dir = crate_dir
-        .parent()
-        .map(|parent| parent.join("target"))
-        .ok_or_else(|| Error::new("crate_dir has no parent"))?;
-    if !target_dir.exists() {
+fn available_sys_symbols(crate_dir: &Path, out_dir: &Path) -> Result<Option<BTreeSet<String>>> {
+    let Some(bindings_file) = select_bindings_file(crate_dir, out_dir)? else {
         return Ok(None);
-    }
-
-    let mut bindings_files = Vec::new();
-    collect_bindings_files(&target_dir, &mut bindings_files)?;
-    if bindings_files.is_empty() {
-        return Ok(None);
-    }
-
+    };
     let symbol_regex = Regex::new(r"pub fn (isl_[A-Za-z0-9_]+)\(")
         .map_err(|err| Error::new(format!("failed to compile symbol regex: {err}")))?;
+    let text = fs::read_to_string(&bindings_file).map_err(|err| {
+        Error::new(format!(
+            "failed to read barvinok-sys bindings {}: {err}",
+            bindings_file.display()
+        ))
+    })?;
     let mut symbols = BTreeSet::new();
-    for bindings_file in bindings_files {
-        let text = fs::read_to_string(&bindings_file).map_err(|err| {
-            Error::new(format!(
-                "failed to read barvinok-sys bindings {}: {err}",
-                bindings_file.display()
-            ))
-        })?;
-        for capture in symbol_regex.captures_iter(&text) {
-            symbols.insert(capture[1].to_string());
-        }
+    for capture in symbol_regex.captures_iter(&text) {
+        symbols.insert(capture[1].to_string());
     }
 
     Ok(Some(symbols))
+}
+
+fn select_bindings_file(crate_dir: &Path, out_dir: &Path) -> Result<Option<PathBuf>> {
+    let mut bindings_files = current_profile_bindings_files(out_dir)?;
+    if bindings_files.is_empty() {
+        let target_dir = crate_dir
+            .parent()
+            .map(|parent| parent.join("target"))
+            .ok_or_else(|| Error::new("crate_dir has no parent"))?;
+        if !target_dir.exists() {
+            return Ok(None);
+        }
+        collect_bindings_files(&target_dir, &mut bindings_files)?;
+    }
+
+    latest_bindings_file(bindings_files)
+}
+
+fn current_profile_bindings_files(out_dir: &Path) -> Result<Vec<PathBuf>> {
+    let Some(profile_build_dir) = out_dir.parent().and_then(Path::parent) else {
+        return Ok(Vec::new());
+    };
+    if profile_build_dir.file_name().and_then(|name| name.to_str()) != Some("build") {
+        return Ok(Vec::new());
+    }
+
+    let mut bindings_files = Vec::new();
+    collect_bindings_files(profile_build_dir, &mut bindings_files)?;
+    Ok(bindings_files)
+}
+
+fn latest_bindings_file(bindings_files: Vec<PathBuf>) -> Result<Option<PathBuf>> {
+    let mut latest: Option<(std::time::SystemTime, PathBuf)> = None;
+    for bindings_file in bindings_files {
+        let modified = fs::metadata(&bindings_file)
+            .and_then(|metadata| metadata.modified())
+            .map_err(|err| {
+                Error::new(format!(
+                    "failed to read metadata for {}: {err}",
+                    bindings_file.display()
+                ))
+            })?;
+        match &latest {
+            Some((latest_modified, latest_path))
+                if modified < *latest_modified
+                    || (modified == *latest_modified && bindings_file <= *latest_path) => {}
+            _ => latest = Some((modified, bindings_file)),
+        }
+    }
+    Ok(latest.map(|(_, path)| path))
 }
 
 fn collect_bindings_files(dir: &Path, bindings_files: &mut Vec<PathBuf>) -> Result<()> {
@@ -1766,12 +1803,24 @@ fn split_top_level(input: &str, separator: char) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     fn workspace_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .to_path_buf()
+    }
+
+    fn temp_test_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "barvinok-gen-{name}-{}-{unique}",
+            std::process::id()
+        ))
     }
 
     #[test]
@@ -1947,6 +1996,52 @@ mod tests {
         assert!(value_normalized.contains("crate::isl_ctor!([ctx]from_str,isl_val_read_from_str"));
         assert!(value_normalized.contains("crate::isl_ctor!([ctx]zero,isl_val_zero"));
         assert!(vector_normalized.contains("impl<'a>Vector<'a>{"));
+    }
+
+    #[test]
+    fn prefers_latest_current_profile_bindings_file() {
+        let root = temp_test_dir("bindings-selection");
+        let crate_dir = root.join("barvinok");
+        let first = root
+            .join("target")
+            .join("debug")
+            .join("build")
+            .join("barvinok-sys-old")
+            .join("out")
+            .join("bindings.rs");
+        let second = root
+            .join("target")
+            .join("debug")
+            .join("build")
+            .join("barvinok-sys-new")
+            .join("out")
+            .join("bindings.rs");
+        let out_dir = root
+            .join("target")
+            .join("debug")
+            .join("build")
+            .join("barvinok-current")
+            .join("out");
+
+        fs::create_dir_all(first.parent().unwrap()).unwrap();
+        fs::create_dir_all(second.parent().unwrap()).unwrap();
+        fs::create_dir_all(&crate_dir).unwrap();
+        fs::create_dir_all(&out_dir).unwrap();
+
+        fs::write(&first, "pub fn isl_stale_symbol();\n").unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        fs::write(&second, "pub fn isl_live_symbol();\n").unwrap();
+
+        let bindings = select_bindings_file(&crate_dir, &out_dir).unwrap().unwrap();
+        assert_eq!(bindings, second);
+
+        let symbols = available_sys_symbols(&crate_dir, &out_dir)
+            .unwrap()
+            .unwrap();
+        assert!(symbols.contains("isl_live_symbol"));
+        assert!(!symbols.contains("isl_stale_symbol"));
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
